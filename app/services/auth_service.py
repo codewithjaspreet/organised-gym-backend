@@ -32,7 +32,7 @@ class AuthService:
                 phone=user.phone,
                 gender=user.gender,
                 address_line1=user.address_line1,
-                address_line2=user.address_line2,
+            address_line2=user.address_line2,
                 city=user.city,
                 state=user.state,
                 postal_code=user.postal_code,

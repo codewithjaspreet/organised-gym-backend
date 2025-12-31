@@ -1,6 +1,6 @@
 from functools import lru_cache
 from fastapi import FastAPI
-from app.api.v1 import auth
+from app.api.v1 import auth, gyms, users, memberships, plans, billing, og_plans
 from app.core import config
 from contextlib import asynccontextmanager
 from app.db.db import create_db_and_tables
@@ -17,7 +17,13 @@ def get_settings():
     return config.settings
 
 app = FastAPI(title=config.settings.app_name,lifespan=on_startup)
-app.include_router(auth.router,prefix="/api/v1")
+app.include_router(auth.router, prefix="/api/v1")
+app.include_router(gyms.router, prefix="/api/v1")
+app.include_router(users.router, prefix="/api/v1")
+app.include_router(memberships.router, prefix="/api/v1")
+app.include_router(plans.router, prefix="/api/v1")
+app.include_router(billing.router, prefix="/api/v1")
+app.include_router(og_plans.router, prefix="/api/v1")
 
 @app.get("/")
 def root():
