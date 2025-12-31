@@ -36,7 +36,7 @@ class Gym(SQLModel, table=True):
     )
     city: str = Field(description="The gym's city", min_length=4)
     state: str = Field(description="The gym's state", min_length=4)
-    postal_code: str = Field(description="The gym's postal code", regex=r"^\d{5}$")
+    postal_code: str = Field(description="The gym's postal code")
     dob: Optional[str] = Field(
         description="The gym's date of birth",
         nullable=True
@@ -56,8 +56,14 @@ class Gym(SQLModel, table=True):
     )
     
     # Relationships
-    owner: Optional["User"] = Relationship(back_populates="owned_gyms")
-    members: List["User"] = Relationship(back_populates="gym")
+    owner: Optional["User"] = Relationship(
+        back_populates="owned_gyms",
+        sa_relationship_kwargs={"foreign_keys": "[Gym.owner_id]"}
+    )
+    members: List["User"] = Relationship(
+        back_populates="gym",
+        sa_relationship_kwargs={"foreign_keys": "[User.gym_id]"}
+    )
     attendances: List["Attendance"] = Relationship(back_populates="gym")
     payments: List["Payment"] = Relationship(back_populates="gym")
     memberships: List["Membership"] = Relationship(back_populates="gym")
