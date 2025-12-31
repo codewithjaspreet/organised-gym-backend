@@ -6,7 +6,10 @@ class Settings(BaseSettings):
 
     db_connection_url: str
     app_name: str 
-
+    access_token_expire_minutes: int = 30
+    algorithm: str = "HS256"
+    secret_key: str
+    refresh_token_expire_days: int = 7
     model_config = SettingsConfigDict(env_file=".env")
 
 
