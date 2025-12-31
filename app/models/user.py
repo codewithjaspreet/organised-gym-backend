@@ -19,7 +19,8 @@ class Gender(str, Enum):
 
 
 class Role(str, Enum):
-    ADMIN = "ADMIN"
+    OG = "OG"  # Platform owner
+    ADMIN = "ADMIN"  # Gym owner
     MEMBER = "MEMBER"
     TRAINER = "TRAINER"
     STAFF = "STAFF"

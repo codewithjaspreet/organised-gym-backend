@@ -1,0 +1,31 @@
+from datetime import date, datetime
+from typing import Optional
+from pydantic import BaseModel, Field
+
+
+class MembershipCreate(BaseModel):
+    user_id: str = Field(description="The user id")
+    gym_id: str = Field(description="The gym id")
+    start_date: date = Field(description="The membership start date")
+    end_date: date = Field(description="The membership end date")
+    status: str = Field(description="The membership status")
+    plan_id: str = Field(description="The plan id")
+
+
+class MembershipUpdate(BaseModel):
+    start_date: Optional[date] = Field(description="The membership start date", nullable=True)
+    end_date: Optional[date] = Field(description="The membership end date", nullable=True)
+    status: Optional[str] = Field(description="The membership status", nullable=True)
+    plan_id: Optional[str] = Field(description="The plan id", nullable=True)
+
+
+class MembershipResponse(BaseModel):
+    id: str
+    user_id: str
+    gym_id: str
+    start_date: date
+    end_date: date
+    status: str
+    plan_id: str
+    created_at: datetime
+
