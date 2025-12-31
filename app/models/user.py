@@ -37,18 +37,13 @@ class User(SQLModel, table=True):
     user_name: str = Field(
         description="The user's username",
         unique=True,
-        min_length=4
+        min_length=4,
+        max_length=72
     )
     name: str = Field(description="The user's name", min_length=4)
-    email: str = Field(
-        description="The user's email",
-        regex=r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
-    )
+    email: str = Field(description="The user's email")
     password_hash: str = Field(description="The user's password hash", min_length=8)
-    phone: str = Field(
-        description="The user's phone number",
-        regex=r"^\+[1-9]\d{1,14}$"
-    )
+    phone: str = Field(description="The user's phone number")
     gender: Gender = Field(description="The user's gender")
     address_line1: str = Field(description="The user's address line 1", min_length=4)
     address_line2: Optional[str] = Field(
@@ -57,7 +52,7 @@ class User(SQLModel, table=True):
     )
     city: str = Field(description="The user's city", min_length=4)
     state: str = Field(description="The user's state", min_length=4)
-    postal_code: str = Field(description="The user's postal code", regex=r"^\d{5}$")
+    postal_code: str = Field(description="The user's postal code")
     country: str = Field(description="The user's country", min_length=4)
     dob: date = Field(description="The user's date of birth")
     photo_url: Optional[str] = Field(
@@ -84,8 +79,14 @@ class User(SQLModel, table=True):
     )
     
     # Relationships
-    gym: Optional["Gym"] = Relationship(back_populates="members")
-    owned_gyms: List["Gym"] = Relationship(back_populates="owner")
+    gym: Optional["Gym"] = Relationship(
+        back_populates="members",
+        sa_relationship_kwargs={"foreign_keys": "[User.gym_id]"}
+    )
+    owned_gyms: List["Gym"] = Relationship(
+        back_populates="owner",
+        sa_relationship_kwargs={"foreign_keys": "[Gym.owner_id]"}
+    )
     attendances: List["Attendance"] = Relationship(back_populates="user")
     notifications: List["Notification"] = Relationship(back_populates="user")
     payments: List["Payment"] = Relationship(
