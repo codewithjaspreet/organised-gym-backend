@@ -4,12 +4,14 @@ from typing import Optional, List, TYPE_CHECKING
 from datetime import datetime, date
 from uuid import uuid4
 
+
 if TYPE_CHECKING:
     from app.models.attendance import Attendance
     from app.models.billing import Payment
     from app.models.gym import Gym
     from app.models.membership import Membership
     from app.models.notification import Notification
+    from app.models.announcement import Announcement
 
 
 class Gender(str, Enum):
@@ -98,4 +100,5 @@ class User(SQLModel, table=True):
         back_populates="verifier",
         sa_relationship_kwargs={"foreign_keys": "[Payment.verified_by]"}
     )
+    announcements: List["Announcement"] = Relationship(back_populates="user")
     memberships: List["Membership"] = Relationship(back_populates="user")
