@@ -3,6 +3,7 @@ from typing import Optional, List, TYPE_CHECKING
 from datetime import datetime
 from uuid import uuid4
 
+
 if TYPE_CHECKING:
     from app.models.attendance import Attendance
     from app.models.billing import Payment
@@ -10,6 +11,7 @@ if TYPE_CHECKING:
     from app.models.membership import Membership
     from app.models.plan import Plan
     from app.models.user import User
+    from app.models.announcement import Announcement
 
 
 class Gym(SQLModel, table=True):
@@ -64,6 +66,8 @@ class Gym(SQLModel, table=True):
         back_populates="gym",
         sa_relationship_kwargs={"foreign_keys": "[User.gym_id]"}
     )
+
+    announcements:List["Announcement"] = Relationship(back_populates="gym")
     attendances: List["Attendance"] = Relationship(back_populates="gym")
     payments: List["Payment"] = Relationship(back_populates="gym")
     memberships: List["Membership"] = Relationship(back_populates="gym")

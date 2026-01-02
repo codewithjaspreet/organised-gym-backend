@@ -19,6 +19,7 @@ class UserCreate(BaseModel):
     postal_code: str
     country: str
     dob: date
+    gym_id: Optional[str] = None
     role: Role = Role.MEMBER
 
 class UserUpdate(BaseModel):
@@ -46,6 +47,7 @@ class UserResponse(BaseModel):
     gender: Gender
     address_line1: str
     address_line2: Optional[str] = None
+    gym_id: Optional[str] = None
     city: str
     state: str
     postal_code: str

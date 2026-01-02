@@ -3,6 +3,9 @@ from typing import Optional
 from datetime import datetime
 from uuid import uuid4
 
+from app.models.gym import Gym
+from app.models.user import User
+
 
 class Attendance(SQLModel, table=True):
     __tablename__ = "attendance"
