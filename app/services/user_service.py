@@ -1,8 +1,8 @@
 from sqlmodel import select
-from app.core.exceptions import NotFoundError, UserNotFoundError
+from app.core.exceptions import NotFoundError, UserNameAlreadyExistsError, UserNotFoundError
 from app.db.db import SessionDep
 from app.models.user import User
-from app.schemas.user import UserResponse, UserUpdate
+from app.schemas.user import UserCreate, UserResponse, UserUpdate
 
 
 class UserService:
@@ -45,4 +45,16 @@ class UserService:
         self.session.delete(user)
         self.session.commit()
         return None
+
+    def create_user(self, user: UserCreate) -> UserResponse:
+        stmt = select(User).where(User.user_name == user.user_name)
+        existing = self.session.exec(stmt).first()
+        if existing:
+            raise UserNameAlreadyExistsError()
+        
+        user = User(**user.model_dump())
+        self.session.add(user)
+        self.session.commit()
+        self.session.refresh(user)
+        return UserResponse(**user.model_dump(exclude={"password_hash"}))
 
