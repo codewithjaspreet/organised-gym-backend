@@ -6,7 +6,7 @@ from app.models.user import Gender, Role
 
 
 class UserCreate(BaseModel):
-    user_name: str
+    user_name: Optional[str] = None  # Auto-generated if not provided
     name: str
     email: str
     password: str
