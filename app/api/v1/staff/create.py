@@ -5,6 +5,8 @@ from app.db.db import SessionDep
 from app.models.user import User, Role
 from app.models.billing import Payment
 from app.schemas.billing import PaymentCreate, PaymentResponse
+from app.schemas.response import APIResponse
+from app.utils.response import success_response
 from app.services.billing_service import BillingService
 
 router = APIRouter(prefix="/create", tags=["staff"])
@@ -20,7 +22,7 @@ def get_staff_gym(current_user: User, session: SessionDep):
     return current_user.gym_id
 
 
-@router.post("/payments", response_model=PaymentResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/payments", response_model=APIResponse[PaymentResponse], status_code=status.HTTP_201_CREATED)
 def create_payment(
     payment: PaymentCreate,
     session: SessionDep = None,
@@ -49,5 +51,6 @@ def create_payment(
         )
     
     billing_service = BillingService(session=session)
-    return billing_service.create_payment(payment)
+    payment_data = billing_service.create_payment(payment)
+    return success_response(data=payment_data, message="Payment created successfully")
 

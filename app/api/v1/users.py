@@ -4,22 +4,25 @@ from app.db.db import SessionDep
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
 from app.schemas.dashboard import DashboardKPIsResponse
+from app.schemas.response import APIResponse
+from app.utils.response import success_response
 from app.services.user_service import UserService
 from app.services.dashboard_service import DashboardService
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 
-@router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=APIResponse[UserResponse], status_code=status.HTTP_201_CREATED)
 def create_user(
     user: UserCreate,
     session: SessionDep,
     current_user: User = require_any_authenticated
 ):
     user_service = UserService(session=session)
-    return user_service.create_user(user)
+    user_data = user_service.create_user(user)
+    return success_response(data=user_data, message="User created successfully")
 
-@router.get("/{user_id}", response_model=UserResponse)
+@router.get("/{user_id}", response_model=APIResponse[UserResponse])
 def get_user(
     user_id: str,
     session: SessionDep,
@@ -27,9 +30,10 @@ def get_user(
 ):
     check_ownership_or_admin(user_id, current_user)
     user_service = UserService(session=session)
-    return user_service.get_user(user_id)
+    user_data = user_service.get_user(user_id)
+    return success_response(data=user_data, message="User data fetched successfully")
 
-@router.put("/{user_id}", response_model=UserResponse)
+@router.put("/{user_id}", response_model=APIResponse[UserResponse])
 def update_user(
     user_id: str,
     user: UserUpdate,
@@ -38,19 +42,21 @@ def update_user(
 ):
     check_ownership_or_admin(user_id, current_user)
     user_service = UserService(session=session)
-    return user_service.update_user(user_id, user)
+    updated_user = user_service.update_user(user_id, user)
+    return success_response(data=updated_user, message="User updated successfully")
 
-@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{user_id}", response_model=APIResponse[dict])
 def delete_user(
     user_id: str,
     session: SessionDep,
     current_user: User = require_admin
 ):
     user_service = UserService(session=session)
-    return user_service.delete_user(user_id)
+    user_service.delete_user(user_id)
+    return success_response(data=None, message="User deleted successfully")
 
 
-@router.get("/dashboard/kpis", response_model=DashboardKPIsResponse)
+@router.get("/dashboard/kpis", response_model=APIResponse[DashboardKPIsResponse])
 def get_dashboard_kpis(
     session: SessionDep = None,
     current_user: User = require_any_authenticated
@@ -63,9 +69,10 @@ def get_dashboard_kpis(
     - STAFF/TRAINER: Limited gym stats (check-ins, check-outs only)
     """
     dashboard_service = DashboardService(session=session)
-    return dashboard_service.get_user_kpis(
+    kpis_data = dashboard_service.get_user_kpis(
         user_id=current_user.id,
         role=current_user.role,
         gym_id=current_user.gym_id
     )
+    return success_response(data=kpis_data, message="Dashboard KPIs fetched successfully")
 

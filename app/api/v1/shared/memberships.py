@@ -5,11 +5,13 @@ from app.db.db import SessionDep
 from app.models.user import User, Role
 from app.models.membership import Membership
 from app.schemas.membership import MembershipCreate, MembershipResponse, MembershipUpdate
+from app.schemas.response import APIResponse
+from app.utils.response import success_response
 from app.services.membership_service import MembershipService
 
 router = APIRouter(prefix="/memberships", tags=["memberships"])
 
-@router.post("/", response_model=MembershipResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=APIResponse[MembershipResponse], status_code=status.HTTP_201_CREATED)
 def create_membership(
     membership: MembershipCreate,
     session: SessionDep,
@@ -26,9 +28,10 @@ def create_membership(
         )
     
     membership_service = MembershipService(session=session)
-    return membership_service.create_membership(membership)
+    membership_data = membership_service.create_membership(membership)
+    return success_response(data=membership_data, message="Membership created successfully")
 
-@router.get("/{membership_id}", response_model=MembershipResponse)
+@router.get("/{membership_id}", response_model=APIResponse[MembershipResponse])
 def get_membership(
     membership_id: str,
     session: SessionDep,
@@ -49,9 +52,10 @@ def get_membership(
         )
     
     membership_service = MembershipService(session=session)
-    return membership_service.get_membership(membership_id)
+    membership_data = membership_service.get_membership(membership_id)
+    return success_response(data=membership_data, message="Membership fetched successfully")
 
-@router.put("/{membership_id}", response_model=MembershipResponse)
+@router.put("/{membership_id}", response_model=APIResponse[MembershipResponse])
 def update_membership(
     membership_id: str,
     membership: MembershipUpdate,
@@ -67,9 +71,10 @@ def update_membership(
     check_gym_ownership(db_membership.gym_id, current_user, session)
     
     membership_service = MembershipService(session=session)
-    return membership_service.update_membership(membership_id, membership)
+    updated_membership = membership_service.update_membership(membership_id, membership)
+    return success_response(data=updated_membership, message="Membership updated successfully")
 
-@router.delete("/{membership_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{membership_id}", response_model=APIResponse[dict])
 def delete_membership(
     membership_id: str,
     session: SessionDep,
@@ -84,5 +89,6 @@ def delete_membership(
     check_gym_ownership(db_membership.gym_id, current_user, session)
     
     membership_service = MembershipService(session=session)
-    return membership_service.delete_membership(membership_id)
+    membership_service.delete_membership(membership_id)
+    return success_response(data=None, message="Membership deleted successfully")
 

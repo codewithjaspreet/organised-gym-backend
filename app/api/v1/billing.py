@@ -5,11 +5,13 @@ from app.db.db import SessionDep
 from app.models.user import User, Role
 from app.models.billing import Payment
 from app.schemas.billing import PaymentCreate, PaymentResponse, PaymentUpdate
+from app.schemas.response import APIResponse
+from app.utils.response import success_response
 from app.services.billing_service import BillingService
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
-@router.post("/", response_model=PaymentResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=APIResponse[PaymentResponse], status_code=status.HTTP_201_CREATED)
 def create_payment(
     payment: PaymentCreate,
     session: SessionDep,
@@ -23,9 +25,10 @@ def create_payment(
         )
     
     billing_service = BillingService(session=session)
-    return billing_service.create_payment(payment)
+    payment_data = billing_service.create_payment(payment)
+    return success_response(data=payment_data, message="Payment created successfully")
 
-@router.get("/{payment_id}", response_model=PaymentResponse)
+@router.get("/{payment_id}", response_model=APIResponse[PaymentResponse])
 def get_payment(
     payment_id: str,
     session: SessionDep,
@@ -46,9 +49,10 @@ def get_payment(
         )
     
     billing_service = BillingService(session=session)
-    return billing_service.get_payment(payment_id)
+    payment_data = billing_service.get_payment(payment_id)
+    return success_response(data=payment_data, message="Payment fetched successfully")
 
-@router.put("/{payment_id}", response_model=PaymentResponse)
+@router.put("/{payment_id}", response_model=APIResponse[PaymentResponse])
 def update_payment(
     payment_id: str,
     payment: PaymentUpdate,
@@ -64,9 +68,10 @@ def update_payment(
     check_gym_ownership(db_payment.gym_id, current_user, session)
     
     billing_service = BillingService(session=session)
-    return billing_service.update_payment(payment_id, payment)
+    updated_payment = billing_service.update_payment(payment_id, payment)
+    return success_response(data=updated_payment, message="Payment updated successfully")
 
-@router.delete("/{payment_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{payment_id}", response_model=APIResponse[dict])
 def delete_payment(
     payment_id: str,
     session: SessionDep,
@@ -81,5 +86,6 @@ def delete_payment(
     check_gym_ownership(db_payment.gym_id, current_user, session)
     
     billing_service = BillingService(session=session)
-    return billing_service.delete_payment(payment_id)
+    billing_service.delete_payment(payment_id)
+    return success_response(data=None, message="Payment deleted successfully")
 

@@ -10,6 +10,8 @@ from app.schemas.plan import PlanCreate, PlanResponse
 from app.schemas.membership import MembershipCreate, MembershipResponse
 from app.schemas.announcement import AnnouncementCreate, AnnouncementResponse
 from app.schemas.notification import NotificationCreate, NotificationResponse
+from app.schemas.response import APIResponse
+from app.utils.response import success_response
 from app.services.user_service import UserService
 from app.services.gym_service import GymService
 from app.services.plan_service import PlanService
@@ -32,7 +34,7 @@ def get_owner_gym(current_user: User, session: SessionDep) -> Gym:
     return gym
 
 
-@router.post("/members", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/members", response_model=APIResponse[UserResponse], status_code=status.HTTP_201_CREATED)
 def create_member(
     user: UserCreate,
     session: SessionDep = None,
@@ -46,10 +48,11 @@ def create_member(
     user_dict["role"] = "MEMBER"
     
     user_service = UserService(session=session)
-    return user_service.create_user(UserCreate(**user_dict))
+    member_data = user_service.create_user(UserCreate(**user_dict))
+    return success_response(data=member_data, message="Member created successfully")
 
 
-@router.post("/staff", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/staff", response_model=APIResponse[UserResponse], status_code=status.HTTP_201_CREATED)
 def create_staff(
     user: UserCreate,
     session: SessionDep = None,
@@ -63,10 +66,11 @@ def create_staff(
     user_dict["role"] = "STAFF"
     
     user_service = UserService(session=session)
-    return user_service.create_user(UserCreate(**user_dict))
+    staff_data = user_service.create_user(UserCreate(**user_dict))
+    return success_response(data=staff_data, message="Staff created successfully")
 
 
-@router.post("/trainers", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/trainers", response_model=APIResponse[UserResponse], status_code=status.HTTP_201_CREATED)
 def create_trainer(
     user: UserCreate,
     session: SessionDep = None,
@@ -80,10 +84,11 @@ def create_trainer(
     user_dict["role"] = "TRAINER"
     
     user_service = UserService(session=session)
-    return user_service.create_user(UserCreate(**user_dict))
+    trainer_data = user_service.create_user(UserCreate(**user_dict))
+    return success_response(data=trainer_data, message="Trainer created successfully")
 
 
-@router.post("/plans", response_model=PlanResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/plans", response_model=APIResponse[PlanResponse], status_code=status.HTTP_201_CREATED)
 def create_plan(
     plan: PlanCreate,
     session: SessionDep = None,
@@ -99,10 +104,11 @@ def create_plan(
         )
     
     plan_service = PlanService(session=session)
-    return plan_service.create_plan(plan)
+    plan_data = plan_service.create_plan(plan)
+    return success_response(data=plan_data, message="Plan created successfully")
 
 
-@router.post("/memberships", response_model=MembershipResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/memberships", response_model=APIResponse[MembershipResponse], status_code=status.HTTP_201_CREATED)
 def create_membership(
     membership: MembershipCreate,
     session: SessionDep = None,
@@ -118,10 +124,11 @@ def create_membership(
         )
     
     membership_service = MembershipService(session=session)
-    return membership_service.create_membership(membership)
+    membership_data = membership_service.create_membership(membership)
+    return success_response(data=membership_data, message="Membership created successfully")
 
 
-@router.post("/announcements", response_model=AnnouncementResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/announcements", response_model=APIResponse[AnnouncementResponse], status_code=status.HTTP_201_CREATED)
 def create_announcement(
     announcement: AnnouncementCreate,
     session: SessionDep = None,
@@ -141,10 +148,11 @@ def create_announcement(
     announcement_create = AnnouncementCreate(**announcement_dict)
     
     announcement_service = AnnouncementService(session=session)
-    return announcement_service.create_announcement(announcement_create)
+    announcement_data = announcement_service.create_announcement(announcement_create)
+    return success_response(data=announcement_data, message="Announcement created successfully")
 
 
-@router.post("/notifications", response_model=NotificationResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/notifications", response_model=APIResponse[NotificationResponse], status_code=status.HTTP_201_CREATED)
 def create_notification(
     notification: NotificationCreate,
     session: SessionDep = None,
@@ -166,5 +174,6 @@ def create_notification(
         )
     
     notification_service = NotificationService(session=session)
-    return notification_service.create_notification(notification=notification)
+    notification_data = notification_service.create_notification(notification=notification)
+    return success_response(data=notification_data, message="Notification created successfully")
 

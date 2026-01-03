@@ -6,6 +6,8 @@ from app.models.user import User, Role
 from app.models.billing import Payment
 from app.schemas.user import UserResponse, UserUpdate
 from app.schemas.billing import PaymentResponse, PaymentUpdate
+from app.schemas.response import APIResponse
+from app.utils.response import success_response
 from app.services.user_service import UserService
 from app.services.billing_service import BillingService
 
@@ -22,7 +24,7 @@ def get_staff_gym(current_user: User, session: SessionDep):
     return current_user.gym_id
 
 
-@router.put("/profile", response_model=UserResponse)
+@router.put("/profile", response_model=APIResponse[UserResponse])
 def update_staff_profile(
     user: UserUpdate,
     session: SessionDep = None,
@@ -36,10 +38,11 @@ def update_staff_profile(
         )
     
     user_service = UserService(session=session)
-    return user_service.update_user(current_user.id, user)
+    updated_user = user_service.update_user(current_user.id, user)
+    return success_response(data=updated_user, message="Staff profile updated successfully")
 
 
-@router.put("/payments/{payment_id}", response_model=PaymentResponse)
+@router.put("/payments/{payment_id}", response_model=APIResponse[PaymentResponse])
 def update_payment(
     payment_id: str,
     payment: PaymentUpdate,
@@ -63,5 +66,6 @@ def update_payment(
             detail="Payment does not belong to your gym"
         )
     
-    return billing_service.update_payment(payment_id, payment)
+    updated_payment = billing_service.update_payment(payment_id, payment)
+    return success_response(data=updated_payment, message="Payment updated successfully")
 

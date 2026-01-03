@@ -3,12 +3,14 @@ from app.core.permissions import require_any_authenticated
 from app.db.db import SessionDep
 from app.models.user import User, Role
 from app.schemas.user import UserResponse, UserUpdate
+from app.schemas.response import APIResponse
+from app.utils.response import success_response
 from app.services.user_service import UserService
 
 router = APIRouter(prefix="/update", tags=["members"])
 
 
-@router.put("/profile", response_model=UserResponse)
+@router.put("/profile", response_model=APIResponse[UserResponse])
 def update_member_profile(
     user: UserUpdate,
     session: SessionDep = None,
@@ -22,5 +24,6 @@ def update_member_profile(
         )
     
     user_service = UserService(session=session)
-    return user_service.update_user(current_user.id, user)
+    updated_user = user_service.update_user(current_user.id, user)
+    return success_response(data=updated_user, message="Member profile updated successfully")
 

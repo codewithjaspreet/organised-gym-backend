@@ -7,6 +7,8 @@ from app.models.billing import Payment
 from app.schemas.user import UserResponse
 from app.schemas.billing import PaymentResponse
 from app.schemas.dashboard import DashboardKPIsResponse
+from app.schemas.response import APIResponse
+from app.utils.response import success_response
 from app.services.user_service import UserService
 from app.services.billing_service import BillingService
 from app.services.dashboard_service import DashboardService
@@ -24,7 +26,7 @@ def get_staff_gym(current_user: User, session: SessionDep):
     return current_user.gym_id
 
 
-@router.get("/profile", response_model=UserResponse)
+@router.get("/profile", response_model=APIResponse[UserResponse])
 def get_staff_profile(
     session: SessionDep = None,
     current_user: User = require_admin_or_staff
@@ -37,10 +39,11 @@ def get_staff_profile(
         )
     
     user_service = UserService(session=session)
-    return user_service.get_user(current_user.id)
+    user_data = user_service.get_user(current_user.id)
+    return success_response(data=user_data, message="Staff profile fetched successfully")
 
 
-@router.get("/dashboard", response_model=DashboardKPIsResponse)
+@router.get("/dashboard", response_model=APIResponse[DashboardKPIsResponse])
 def get_dashboard_kpis(
     session: SessionDep = None,
     current_user: User = require_admin_or_staff
@@ -53,14 +56,15 @@ def get_dashboard_kpis(
         )
     
     dashboard_service = DashboardService(session=session)
-    return dashboard_service.get_user_kpis(
+    kpis_data = dashboard_service.get_user_kpis(
         user_id=current_user.id,
         role=current_user.role,
         gym_id=current_user.gym_id
     )
+    return success_response(data=kpis_data, message="Staff dashboard KPIs fetched successfully")
 
 
-@router.get("/payments/{payment_id}", response_model=PaymentResponse)
+@router.get("/payments/{payment_id}", response_model=APIResponse[PaymentResponse])
 def get_payment(
     payment_id: str,
     session: SessionDep = None,
@@ -83,5 +87,5 @@ def get_payment(
             detail="Payment does not belong to your gym"
         )
     
-    return payment
+    return success_response(data=payment, message="Payment fetched successfully")
 
