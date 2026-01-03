@@ -1,9 +1,9 @@
-from fastapi import APIRouter, status, HTTPException
+from fastapi import APIRouter, status
 from app.core.permissions import require_any_authenticated
 from app.db.db import SessionDep
 from app.models.user import User, Role
 from app.schemas.response import APIResponse
-from app.utils.response import success_response
+from app.utils.response import success_response, failure_response
 
 router = APIRouter(prefix="/create", tags=["trainers"])
 
@@ -15,9 +15,9 @@ def create_trainer_profile(
 ):
     """Create trainer profile (placeholder for future trainer-specific features)"""
     if current_user.role != Role.TRAINER:
-        raise HTTPException(
-            status_code=403,
-            detail="Only trainers can access this endpoint"
+        return failure_response(
+            message="Only trainers can access this endpoint",
+            data=None
         )
     
     return success_response(data={"message": "Trainer profile creation endpoint"}, message="Trainer profile creation endpoint")
