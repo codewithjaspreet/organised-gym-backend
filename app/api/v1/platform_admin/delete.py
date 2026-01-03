@@ -1,7 +1,9 @@
-from fastapi import APIRouter, status, HTTPException
+from fastapi import APIRouter, HTTPException
 from app.core.permissions import require_og
 from app.db.db import SessionDep
 from app.models.user import User
+from app.schemas.response import APIResponse
+from app.utils.response import success_response
 from app.services.user_service import UserService
 from app.services.gym_service import GymService
 from app.services.og_plan_service import OGPlanService
@@ -9,7 +11,7 @@ from app.services.og_plan_service import OGPlanService
 router = APIRouter(prefix="/delete", tags=["platform-admin"])
 
 
-@router.delete("/owners/{owner_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/owners/{owner_id}", response_model=APIResponse[dict])
 def delete_owner(
     owner_id: str,
     session: SessionDep = None,
@@ -25,10 +27,11 @@ def delete_owner(
             detail="Owner not found"
         )
     
-    return user_service.delete_user(owner_id)
+    user_service.delete_user(owner_id)
+    return success_response(data=None, message="Owner deleted successfully")
 
 
-@router.delete("/gyms/{gym_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/gyms/{gym_id}", response_model=APIResponse[dict])
 def delete_gym(
     gym_id: str,
     session: SessionDep = None,
@@ -36,10 +39,11 @@ def delete_gym(
 ):
     """Delete a gym"""
     gym_service = GymService(session=session)
-    return gym_service.delete_gym(gym_id)
+    gym_service.delete_gym(gym_id)
+    return success_response(data=None, message="Gym deleted successfully")
 
 
-@router.delete("/og-plans/{og_plan_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/og-plans/{og_plan_id}", response_model=APIResponse[dict])
 def delete_og_plan(
     og_plan_id: str,
     session: SessionDep = None,
@@ -47,5 +51,6 @@ def delete_og_plan(
 ):
     """Delete an OG plan"""
     og_plan_service = OGPlanService(session=session)
-    return og_plan_service.delete_og_plan(og_plan_id)
+    og_plan_service.delete_og_plan(og_plan_id)
+    return success_response(data=None, message="OG plan deleted successfully")
 

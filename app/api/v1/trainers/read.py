@@ -4,13 +4,15 @@ from app.db.db import SessionDep
 from app.models.user import User, Role
 from app.schemas.user import UserResponse
 from app.schemas.dashboard import DashboardKPIsResponse
+from app.schemas.response import APIResponse
+from app.utils.response import success_response
 from app.services.user_service import UserService
 from app.services.dashboard_service import DashboardService
 
 router = APIRouter(prefix="/read", tags=["trainers"])
 
 
-@router.get("/profile", response_model=UserResponse)
+@router.get("/profile", response_model=APIResponse[UserResponse])
 def get_trainer_profile(
     session: SessionDep = None,
     current_user: User = require_any_authenticated
@@ -23,10 +25,11 @@ def get_trainer_profile(
         )
     
     user_service = UserService(session=session)
-    return user_service.get_user(current_user.id)
+    user_data = user_service.get_user(current_user.id)
+    return success_response(data=user_data, message="Trainer profile fetched successfully")
 
 
-@router.get("/dashboard", response_model=DashboardKPIsResponse)
+@router.get("/dashboard", response_model=APIResponse[DashboardKPIsResponse])
 def get_dashboard_kpis(
     session: SessionDep = None,
     current_user: User = require_any_authenticated
@@ -39,9 +42,10 @@ def get_dashboard_kpis(
         )
     
     dashboard_service = DashboardService(session=session)
-    return dashboard_service.get_user_kpis(
+    kpis_data = dashboard_service.get_user_kpis(
         user_id=current_user.id,
         role=current_user.role,
         gym_id=current_user.gym_id
     )
+    return success_response(data=kpis_data, message="Trainer dashboard KPIs fetched successfully")
 

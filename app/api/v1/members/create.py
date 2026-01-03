@@ -4,13 +4,15 @@ from app.db.db import SessionDep
 from app.models.user import User, Role
 from app.schemas.membership import MembershipCreate, MembershipResponse
 from app.schemas.billing import PaymentCreate, PaymentResponse
+from app.schemas.response import APIResponse
+from app.utils.response import success_response
 from app.services.membership_service import MembershipService
 from app.services.billing_service import BillingService
 
 router = APIRouter(prefix="/create", tags=["members"])
 
 
-@router.post("/memberships", response_model=MembershipResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/memberships", response_model=APIResponse[MembershipResponse], status_code=status.HTTP_201_CREATED)
 def create_membership(
     membership: MembershipCreate,
     session: SessionDep = None,
@@ -30,10 +32,11 @@ def create_membership(
         )
     
     membership_service = MembershipService(session=session)
-    return membership_service.create_membership(membership)
+    membership_data = membership_service.create_membership(membership)
+    return success_response(data=membership_data, message="Membership created successfully")
 
 
-@router.post("/payments", response_model=PaymentResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/payments", response_model=APIResponse[PaymentResponse], status_code=status.HTTP_201_CREATED)
 def create_payment(
     payment: PaymentCreate,
     session: SessionDep = None,
@@ -53,5 +56,6 @@ def create_payment(
         )
     
     billing_service = BillingService(session=session)
-    return billing_service.create_payment(payment)
+    payment_data = billing_service.create_payment(payment)
+    return success_response(data=payment_data, message="Payment created successfully")
 
