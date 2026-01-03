@@ -1,11 +1,11 @@
-from fastapi import APIRouter, status, HTTPException
+from fastapi import APIRouter, status
 from app.core.permissions import require_any_authenticated
 from app.db.db import SessionDep
 from app.models.user import User, Role
 from app.schemas.membership import MembershipCreate, MembershipResponse
 from app.schemas.billing import PaymentCreate, PaymentResponse
 from app.schemas.response import APIResponse
-from app.utils.response import success_response
+from app.utils.response import success_response, failure_response
 from app.services.membership_service import MembershipService
 from app.services.billing_service import BillingService
 
@@ -20,15 +20,15 @@ def create_membership(
 ):
     """Create a membership for the current member"""
     if current_user.role != Role.MEMBER:
-        raise HTTPException(
-            status_code=403,
-            detail="Only members can create memberships for themselves"
+        return failure_response(
+            message="Only members can create memberships for themselves",
+            data=None
         )
     
     if membership.user_id != current_user.id:
-        raise HTTPException(
-            status_code=403,
-            detail="You can only create memberships for yourself"
+        return failure_response(
+            message="You can only create memberships for yourself",
+            data=None
         )
     
     membership_service = MembershipService(session=session)
@@ -44,15 +44,15 @@ def create_payment(
 ):
     """Create a payment for the current member"""
     if current_user.role != Role.MEMBER:
-        raise HTTPException(
-            status_code=403,
-            detail="Only members can create payments for themselves"
+        return failure_response(
+            message="Only members can create payments for themselves",
+            data=None
         )
     
     if payment.user_id != current_user.id:
-        raise HTTPException(
-            status_code=403,
-            detail="You can only create payments for yourself"
+        return failure_response(
+            message="You can only create payments for yourself",
+            data=None
         )
     
     billing_service = BillingService(session=session)

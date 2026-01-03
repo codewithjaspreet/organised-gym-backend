@@ -1,4 +1,4 @@
-from fastapi import APIRouter, status, HTTPException
+from fastapi import APIRouter, status
 from sqlmodel import select
 from app.core.permissions import require_admin
 from app.db.db import SessionDep
@@ -11,7 +11,7 @@ from app.schemas.membership import MembershipCreate, MembershipResponse
 from app.schemas.announcement import AnnouncementCreate, AnnouncementResponse
 from app.schemas.notification import NotificationCreate, NotificationResponse
 from app.schemas.response import APIResponse
-from app.utils.response import success_response
+from app.utils.response import success_response, failure_response
 from app.services.user_service import UserService
 from app.services.gym_service import GymService
 from app.services.plan_service import PlanService
@@ -22,16 +22,10 @@ from app.services.notification_service import NotificationService
 router = APIRouter(prefix="/create", tags=["owners"])
 
 
-def get_owner_gym(current_user: User, session: SessionDep) -> Gym:
+def get_owner_gym(current_user: User, session: SessionDep):
     """Helper function to get the gym owned by the current admin user"""
     stmt = select(Gym).where(Gym.owner_id == current_user.id)
-    gym = session.exec(stmt).first()
-    if not gym:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No gym found for this owner"
-        )
-    return gym
+    return session.exec(stmt).first()
 
 
 @router.post("/members", response_model=APIResponse[UserResponse], status_code=status.HTTP_201_CREATED)
@@ -42,6 +36,11 @@ def create_member(
 ):
     """Create a new member for the owner's gym"""
     gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
     
     user_dict = user.model_dump()
     user_dict["gym_id"] = gym.id
@@ -60,6 +59,11 @@ def create_staff(
 ):
     """Create a new staff member for the owner's gym"""
     gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
     
     user_dict = user.model_dump()
     user_dict["gym_id"] = gym.id
@@ -78,6 +82,11 @@ def create_trainer(
 ):
     """Create a new trainer for the owner's gym"""
     gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
     
     user_dict = user.model_dump()
     user_dict["gym_id"] = gym.id
@@ -96,11 +105,16 @@ def create_plan(
 ):
     """Create a new plan for the owner's gym"""
     gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
     
     if plan.gym_id != gym.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only create plans for your own gym"
+        return failure_response(
+            message="You can only create plans for your own gym",
+            status_code=status.HTTP_403_FORBIDDEN
         )
     
     plan_service = PlanService(session=session)
@@ -116,11 +130,16 @@ def create_membership(
 ):
     """Create a new membership for the owner's gym"""
     gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
     
     if membership.gym_id != gym.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only create memberships for your own gym"
+        return failure_response(
+            message="You can only create memberships for your own gym",
+            status_code=status.HTTP_403_FORBIDDEN
         )
     
     membership_service = MembershipService(session=session)
@@ -136,11 +155,16 @@ def create_announcement(
 ):
     """Create a new announcement for the owner's gym"""
     gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
     
     if announcement.gym_id != gym.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only create announcements for your own gym"
+        return failure_response(
+            message="You can only create announcements for your own gym",
+            status_code=status.HTTP_403_FORBIDDEN
         )
     
     announcement_dict = announcement.model_dump()
@@ -160,6 +184,11 @@ def create_notification(
 ):
     """Create a new notification for a user in the owner's gym"""
     gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
     
     from app.models.user import User as UserModel
     user_stmt = select(UserModel).where(
@@ -168,9 +197,9 @@ def create_notification(
     )
     user = session.exec(user_stmt).first()
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User does not belong to your gym"
+        return failure_response(
+            message="User does not belong to your gym",
+            status_code=status.HTTP_403_FORBIDDEN
         )
     
     notification_service = NotificationService(session=session)
