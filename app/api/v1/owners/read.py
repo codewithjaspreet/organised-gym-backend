@@ -12,6 +12,8 @@ from app.schemas.membership import MembershipResponse
 from app.schemas.announcement import AnnouncementResponse, AnnouncementListResponse
 from app.schemas.notification import NotificationResponse, NotificationListResponse
 from app.schemas.dashboard import DashboardKPIsResponse
+from app.schemas.response import APIResponse
+from app.utils.response import success_response
 from app.services.user_service import UserService
 from app.services.gym_service import GymService
 from app.services.plan_service import PlanService
@@ -35,17 +37,18 @@ def get_owner_gym(current_user: User, session: SessionDep) -> Gym:
     return gym
 
 
-@router.get("/profile", response_model=UserResponse)
+@router.get("/profile", response_model=APIResponse[UserResponse])
 def get_owner_profile(
     session: SessionDep = None,
     current_user: User = require_admin
 ):
     """Get owner profile"""
     user_service = UserService(session=session)
-    return user_service.get_user(current_user.id)
+    user_data = user_service.get_user(current_user.id)
+    return success_response(data=user_data, message="Owner profile fetched successfully")
 
 
-@router.get("/dashboard", response_model=DashboardKPIsResponse)
+@router.get("/dashboard", response_model=APIResponse[DashboardKPIsResponse])
 def get_dashboard_kpis(
     session: SessionDep = None,
     current_user: User = require_admin
@@ -53,14 +56,15 @@ def get_dashboard_kpis(
     """Fetch key gym metrics (active members, check-ins, etc.)"""
     gym = get_owner_gym(current_user, session)
     dashboard_service = DashboardService(session=session)
-    return dashboard_service.get_user_kpis(
+    kpis_data = dashboard_service.get_user_kpis(
         user_id=current_user.id,
         role=current_user.role,
         gym_id=gym.id
     )
+    return success_response(data=kpis_data, message="Dashboard KPIs fetched successfully")
 
 
-@router.get("/gym", response_model=GymResponse)
+@router.get("/gym", response_model=APIResponse[GymResponse])
 def get_owner_gym_info(
     session: SessionDep = None,
     current_user: User = require_admin
@@ -68,10 +72,11 @@ def get_owner_gym_info(
     """Get owner's gym information"""
     gym = get_owner_gym(current_user, session)
     gym_service = GymService(session=session)
-    return gym_service.get_gym(gym.id)
+    gym_data = gym_service.get_gym(gym.id)
+    return success_response(data=gym_data, message="Gym information fetched successfully")
 
 
-@router.get("/members/{member_id}", response_model=UserResponse)
+@router.get("/members/{member_id}", response_model=APIResponse[UserResponse])
 def get_member(
     member_id: str,
     session: SessionDep = None,
@@ -88,10 +93,10 @@ def get_member(
             detail="Member not found in your gym"
         )
     
-    return member
+    return success_response(data=member, message="Member data fetched successfully")
 
 
-@router.get("/staff/{staff_id}", response_model=UserResponse)
+@router.get("/staff/{staff_id}", response_model=APIResponse[UserResponse])
 def get_staff(
     staff_id: str,
     session: SessionDep = None,
@@ -108,10 +113,10 @@ def get_staff(
             detail="Staff not found in your gym"
         )
     
-    return staff
+    return success_response(data=staff, message="Staff data fetched successfully")
 
 
-@router.get("/trainers/{trainer_id}", response_model=UserResponse)
+@router.get("/trainers/{trainer_id}", response_model=APIResponse[UserResponse])
 def get_trainer(
     trainer_id: str,
     session: SessionDep = None,
@@ -128,10 +133,10 @@ def get_trainer(
             detail="Trainer not found in your gym"
         )
     
-    return trainer
+    return success_response(data=trainer, message="Trainer data fetched successfully")
 
 
-@router.get("/plans/{plan_id}", response_model=PlanResponse)
+@router.get("/plans/{plan_id}", response_model=APIResponse[PlanResponse])
 def get_plan(
     plan_id: str,
     session: SessionDep = None,
@@ -148,10 +153,10 @@ def get_plan(
             detail="Plan not found in your gym"
         )
     
-    return plan
+    return success_response(data=plan, message="Plan fetched successfully")
 
 
-@router.get("/memberships/{membership_id}", response_model=MembershipResponse)
+@router.get("/memberships/{membership_id}", response_model=APIResponse[MembershipResponse])
 def get_membership(
     membership_id: str,
     session: SessionDep = None,
@@ -168,10 +173,10 @@ def get_membership(
             detail="Membership not found in your gym"
         )
     
-    return membership
+    return success_response(data=membership, message="Membership fetched successfully")
 
 
-@router.get("/announcements", response_model=AnnouncementListResponse)
+@router.get("/announcements", response_model=APIResponse[AnnouncementListResponse])
 def get_announcements(
     session: SessionDep = None,
     current_user: User = require_admin
@@ -180,10 +185,11 @@ def get_announcements(
     gym = get_owner_gym(current_user, session)
     announcement_service = AnnouncementService(session=session)
     announcements = announcement_service.get_announcements_by_gym(gym_id=gym.id)
-    return AnnouncementListResponse(announcements=announcements)
+    announcements_data = AnnouncementListResponse(announcements=announcements)
+    return success_response(data=announcements_data, message="Announcements fetched successfully")
 
 
-@router.get("/notifications", response_model=NotificationListResponse)
+@router.get("/notifications", response_model=APIResponse[NotificationListResponse])
 def get_notifications(
     limit: Optional[int] = Query(100, description="Limit number of results"),
     offset: int = Query(0, description="Offset for pagination"),
@@ -193,9 +199,10 @@ def get_notifications(
     """Get all notifications for the owner's gym"""
     gym = get_owner_gym(current_user, session)
     notification_service = NotificationService(session=session)
-    return notification_service.get_notifications_by_gym(
+    notifications_data = notification_service.get_notifications_by_gym(
         gym_id=gym.id,
         limit=limit,
         offset=offset
     )
+    return success_response(data=notifications_data, message="Notifications fetched successfully")
 

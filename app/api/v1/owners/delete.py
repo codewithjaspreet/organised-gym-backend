@@ -1,9 +1,11 @@
-from fastapi import APIRouter, status, HTTPException
+from fastapi import APIRouter, HTTPException
 from sqlmodel import select
 from app.core.permissions import require_admin
 from app.db.db import SessionDep
 from app.models.user import User
 from app.models.gym import Gym
+from app.schemas.response import APIResponse
+from app.utils.response import success_response
 from app.services.user_service import UserService
 from app.services.gym_service import GymService
 from app.services.plan_service import PlanService
@@ -24,7 +26,7 @@ def get_owner_gym(current_user: User, session: SessionDep) -> Gym:
     return gym
 
 
-@router.delete("/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/members/{member_id}", response_model=APIResponse[dict])
 def delete_member(
     member_id: str,
     session: SessionDep = None,
@@ -41,10 +43,11 @@ def delete_member(
             detail="Member not found in your gym"
         )
     
-    return user_service.delete_user(member_id)
+    user_service.delete_user(member_id)
+    return success_response(data=None, message="Member deleted successfully")
 
 
-@router.delete("/staff/{staff_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/staff/{staff_id}", response_model=APIResponse[dict])
 def delete_staff(
     staff_id: str,
     session: SessionDep = None,
@@ -61,10 +64,11 @@ def delete_staff(
             detail="Staff not found in your gym"
         )
     
-    return user_service.delete_user(staff_id)
+    user_service.delete_user(staff_id)
+    return success_response(data=None, message="Staff deleted successfully")
 
 
-@router.delete("/trainers/{trainer_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/trainers/{trainer_id}", response_model=APIResponse[dict])
 def delete_trainer(
     trainer_id: str,
     session: SessionDep = None,
@@ -81,10 +85,11 @@ def delete_trainer(
             detail="Trainer not found in your gym"
         )
     
-    return user_service.delete_user(trainer_id)
+    user_service.delete_user(trainer_id)
+    return success_response(data=None, message="Trainer deleted successfully")
 
 
-@router.delete("/plans/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/plans/{plan_id}", response_model=APIResponse[dict])
 def delete_plan(
     plan_id: str,
     session: SessionDep = None,
@@ -101,10 +106,11 @@ def delete_plan(
             detail="Plan not found in your gym"
         )
     
-    return plan_service.delete_plan(plan_id)
+    plan_service.delete_plan(plan_id)
+    return success_response(data=None, message="Plan deleted successfully")
 
 
-@router.delete("/memberships/{membership_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/memberships/{membership_id}", response_model=APIResponse[dict])
 def delete_membership(
     membership_id: str,
     session: SessionDep = None,
@@ -121,5 +127,6 @@ def delete_membership(
             detail="Membership not found in your gym"
         )
     
-    return membership_service.delete_membership(membership_id)
+    membership_service.delete_membership(membership_id)
+    return success_response(data=None, message="Membership deleted successfully")
 

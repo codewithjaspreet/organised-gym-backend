@@ -8,6 +8,8 @@ from app.schemas.user import UserResponse, UserUpdate
 from app.schemas.gym import GymResponse, GymUpdate
 from app.schemas.plan import PlanResponse, PlanUpdate
 from app.schemas.membership import MembershipResponse, MembershipUpdate
+from app.schemas.response import APIResponse
+from app.utils.response import success_response
 from app.services.user_service import UserService
 from app.services.gym_service import GymService
 from app.services.plan_service import PlanService
@@ -28,7 +30,7 @@ def get_owner_gym(current_user: User, session: SessionDep) -> Gym:
     return gym
 
 
-@router.put("/profile", response_model=UserResponse)
+@router.put("/profile", response_model=APIResponse[UserResponse])
 def update_owner_profile(
     user: UserUpdate,
     session: SessionDep = None,
@@ -36,10 +38,11 @@ def update_owner_profile(
 ):
     """Update owner profile"""
     user_service = UserService(session=session)
-    return user_service.update_user(current_user.id, user)
+    updated_user = user_service.update_user(current_user.id, user)
+    return success_response(data=updated_user, message="Owner profile updated successfully")
 
 
-@router.put("/gym", response_model=GymResponse)
+@router.put("/gym", response_model=APIResponse[GymResponse])
 def update_owner_gym(
     gym: GymUpdate,
     session: SessionDep = None,
@@ -48,10 +51,11 @@ def update_owner_gym(
     """Update owner's gym information"""
     owner_gym = get_owner_gym(current_user, session)
     gym_service = GymService(session=session)
-    return gym_service.update_gym(owner_gym.id, gym)
+    updated_gym = gym_service.update_gym(owner_gym.id, gym)
+    return success_response(data=updated_gym, message="Gym updated successfully")
 
 
-@router.put("/members/{member_id}", response_model=UserResponse)
+@router.put("/members/{member_id}", response_model=APIResponse[UserResponse])
 def update_member(
     member_id: str,
     user: UserUpdate,
@@ -69,10 +73,11 @@ def update_member(
             detail="Member not found in your gym"
         )
     
-    return user_service.update_user(member_id, user)
+    updated_member = user_service.update_user(member_id, user)
+    return success_response(data=updated_member, message="Member updated successfully")
 
 
-@router.put("/staff/{staff_id}", response_model=UserResponse)
+@router.put("/staff/{staff_id}", response_model=APIResponse[UserResponse])
 def update_staff(
     staff_id: str,
     user: UserUpdate,
@@ -90,10 +95,11 @@ def update_staff(
             detail="Staff not found in your gym"
         )
     
-    return user_service.update_user(staff_id, user)
+    updated_staff = user_service.update_user(staff_id, user)
+    return success_response(data=updated_staff, message="Staff updated successfully")
 
 
-@router.put("/trainers/{trainer_id}", response_model=UserResponse)
+@router.put("/trainers/{trainer_id}", response_model=APIResponse[UserResponse])
 def update_trainer(
     trainer_id: str,
     user: UserUpdate,
@@ -111,10 +117,11 @@ def update_trainer(
             detail="Trainer not found in your gym"
         )
     
-    return user_service.update_user(trainer_id, user)
+    updated_trainer = user_service.update_user(trainer_id, user)
+    return success_response(data=updated_trainer, message="Trainer updated successfully")
 
 
-@router.put("/plans/{plan_id}", response_model=PlanResponse)
+@router.put("/plans/{plan_id}", response_model=APIResponse[PlanResponse])
 def update_plan(
     plan_id: str,
     plan: PlanUpdate,
@@ -132,10 +139,11 @@ def update_plan(
             detail="Plan not found in your gym"
         )
     
-    return plan_service.update_plan(plan_id, plan)
+    updated_plan = plan_service.update_plan(plan_id, plan)
+    return success_response(data=updated_plan, message="Plan updated successfully")
 
 
-@router.put("/memberships/{membership_id}", response_model=MembershipResponse)
+@router.put("/memberships/{membership_id}", response_model=APIResponse[MembershipResponse])
 def update_membership(
     membership_id: str,
     membership: MembershipUpdate,
@@ -153,5 +161,6 @@ def update_membership(
             detail="Membership not found in your gym"
         )
     
-    return membership_service.update_membership(membership_id, membership)
+    updated_membership = membership_service.update_membership(membership_id, membership)
+    return success_response(data=updated_membership, message="Membership updated successfully")
 
