@@ -13,17 +13,27 @@ class AuthService:
 
     
     def register(self, user: UserCreate) -> UserResponse:
-            # 1. Check if username exists
+            # 1. Generate username if not provided
+            if not user.user_name:
+                user.user_name = self._generate_username(user.email, user.name)
             
+            # 2. Check if username exists and generate a unique one
             stmt = select(User).where(User.user_name == user.user_name)
             existing = self.session.exec(stmt).first()
             if existing:
-                raise UserNameAlreadyExistsError()
+                # Generate a unique username by appending a number
+                base_username = user.user_name
+                counter = 1
+                while existing:
+                    user.user_name = f"{base_username}{counter}"
+                    stmt = select(User).where(User.user_name == user.user_name)
+                    existing = self.session.exec(stmt).first()
+                    counter += 1
             
-            # 2. Hash password
+            # 3. Hash password
             hashed_password = get_password_hash(user.password)
             
-            # 3. Create user object
+            # 4. Create user object
             db_user = User(
                 user_name=user.user_name,
                 name=user.name,
@@ -32,7 +42,7 @@ class AuthService:
                 phone=user.phone,
                 gender=user.gender,
                 address_line1=user.address_line1,
-            address_line2=user.address_line2,
+                address_line2=user.address_line2,
                 city=user.city,
                 state=user.state,
                 postal_code=user.postal_code,
@@ -50,6 +60,41 @@ class AuthService:
             # 6. Return UserResponse (exclude password_hash)
             user_dict = db_user.model_dump(exclude={"password_hash"})
             return UserResponse(**user_dict)
+    
+    def _generate_username(self, email: str, name: str) -> str:
+        """
+        Generate a username from email or name
+        Ensures minimum length of 4 characters as required by the model
+        """
+        import re
+        import random
+        import string
+        
+        # Try to generate from email first (before @)
+        if email:
+            username = email.split('@')[0]
+            # Remove special characters and keep only alphanumeric
+            username = re.sub(r'[^a-zA-Z0-9]', '', username)
+            if username and len(username) >= 4:
+                return username.lower()
+            elif username:
+                # If too short, pad with random characters
+                padding = ''.join(random.choices(string.ascii_lowercase + string.digits, k=4-len(username)))
+                return (username + padding).lower()
+        
+        # Fallback to name
+        if name:
+            username = re.sub(r'[^a-zA-Z0-9]', '', name)
+            if username and len(username) >= 4:
+                return username.lower()
+            elif username:
+                # If too short, pad with random characters
+                padding = ''.join(random.choices(string.ascii_lowercase + string.digits, k=4-len(username)))
+                return (username + padding).lower()
+        
+        # Final fallback - generate a random username
+        random_part = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+        return f"user{random_part}"
         
         
     def login(self, req: LoginRequest) -> LoginResponse:

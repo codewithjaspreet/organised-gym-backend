@@ -47,14 +47,67 @@ class UserService:
         return None
 
     def create_user(self, user: UserCreate) -> UserResponse:
+        # Generate username if not provided
+        if not user.user_name:
+            user.user_name = self._generate_username(user.email, user.name)
+        
+        # Check if username exists and generate a unique one
         stmt = select(User).where(User.user_name == user.user_name)
         existing = self.session.exec(stmt).first()
         if existing:
-            raise UserNameAlreadyExistsError()
+            # Generate a unique username by appending a number
+            base_username = user.user_name
+            counter = 1
+            while existing:
+                user.user_name = f"{base_username}{counter}"
+                stmt = select(User).where(User.user_name == user.user_name)
+                existing = self.session.exec(stmt).first()
+                counter += 1
         
-        user = User(**user.model_dump())
-        self.session.add(user)
+        # Hash password if provided
+        from app.core.security import get_password_hash
+        user_dict = user.model_dump()
+        if 'password' in user_dict:
+            user_dict['password_hash'] = get_password_hash(user_dict.pop('password'))
+        
+        db_user = User(**user_dict)
+        self.session.add(db_user)
         self.session.commit()
-        self.session.refresh(user)
-        return UserResponse(**user.model_dump(exclude={"password_hash"}))
+        self.session.refresh(db_user)
+        return UserResponse(**db_user.model_dump(exclude={"password_hash"}))
+    
+    def _generate_username(self, email: str, name: str) -> str:
+        """
+        Generate a username from email or name
+        Ensures minimum length of 4 characters as required by the model
+        """
+        import re
+        import random
+        import string
+        
+        # Try to generate from email first (before @)
+        if email:
+            username = email.split('@')[0]
+            # Remove special characters and keep only alphanumeric
+            username = re.sub(r'[^a-zA-Z0-9]', '', username)
+            if username and len(username) >= 4:
+                return username.lower()
+            elif username:
+                # If too short, pad with random characters
+                padding = ''.join(random.choices(string.ascii_lowercase + string.digits, k=4-len(username)))
+                return (username + padding).lower()
+        
+        # Fallback to name
+        if name:
+            username = re.sub(r'[^a-zA-Z0-9]', '', name)
+            if username and len(username) >= 4:
+                return username.lower()
+            elif username:
+                # If too short, pad with random characters
+                padding = ''.join(random.choices(string.ascii_lowercase + string.digits, k=4-len(username)))
+                return (username + padding).lower()
+        
+        # Final fallback - generate a random username
+        random_part = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+        return f"user{random_part}"
 
