@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, status
 from app.core.permissions import require_og
 from app.db.db import SessionDep
 from app.models.user import User
@@ -6,7 +6,7 @@ from app.schemas.user import UserResponse
 from app.schemas.gym import GymResponse
 from app.schemas.og_plan import OGPlanResponse
 from app.schemas.response import APIResponse
-from app.utils.response import success_response
+from app.utils.response import success_response, failure_response
 from app.services.user_service import UserService
 from app.services.gym_service import GymService
 from app.services.og_plan_service import OGPlanService
@@ -25,9 +25,9 @@ def get_owner(
     owner = user_service.get_user(owner_id)
     
     if owner.role != "ADMIN":
-        raise HTTPException(
-            status_code=404,
-            detail="Owner not found"
+        return failure_response(
+            message="Owner not found",
+            status_code=status.HTTP_404_NOT_FOUND
         )
     
     return success_response(data=owner, message="Owner data fetched successfully")

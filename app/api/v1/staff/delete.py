@@ -1,23 +1,23 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, status
 from app.core.permissions import require_admin_or_staff
 from app.db.db import SessionDep
 from app.models.user import User, Role
 from app.schemas.response import APIResponse
-from app.utils.response import success_response
+from app.utils.response import success_response, failure_response
 
 router = APIRouter(prefix="/delete", tags=["staff"])
 
 
-@router.delete("/profile", response_model=APIResponse[dict])
+@router.delete("/profile", response_model=APIResponse[dict], status_code=status.HTTP_200_OK)
 def delete_staff_profile(
     session: SessionDep = None,
     current_user: User = require_admin_or_staff
 ):
     """Delete staff profile (soft delete - deactivate account)"""
     if current_user.role != Role.STAFF:
-        raise HTTPException(
-            status_code=403,
-            detail="Only staff can access this endpoint"
+        return failure_response(
+            message="Only staff can access this endpoint",
+            data=None
         )
     
     from app.services.user_service import UserService

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, status, Query
 from sqlmodel import select
 from typing import Optional, List
 from app.core.permissions import require_admin
@@ -13,7 +13,7 @@ from app.schemas.announcement import AnnouncementResponse, AnnouncementListRespo
 from app.schemas.notification import NotificationResponse, NotificationListResponse
 from app.schemas.dashboard import DashboardKPIsResponse
 from app.schemas.response import APIResponse
-from app.utils.response import success_response
+from app.utils.response import success_response, failure_response
 from app.services.user_service import UserService
 from app.services.gym_service import GymService
 from app.services.plan_service import PlanService
@@ -25,19 +25,14 @@ from app.services.dashboard_service import DashboardService
 router = APIRouter(prefix="/read", tags=["owners"])
 
 
-def get_owner_gym(current_user: User, session: SessionDep) -> Gym:
+def get_owner_gym(current_user: User, session: SessionDep) -> Optional[Gym]:
     """Helper function to get the gym owned by the current admin user"""
     stmt = select(Gym).where(Gym.owner_id == current_user.id)
     gym = session.exec(stmt).first()
-    if not gym:
-        raise HTTPException(
-            status_code=404,
-            detail="No gym found for this owner"
-        )
     return gym
 
 
-@router.get("/profile", response_model=APIResponse[UserResponse])
+@router.get("/profile", response_model=APIResponse[UserResponse], status_code=status.HTTP_200_OK)
 def get_owner_profile(
     session: SessionDep = None,
     current_user: User = require_admin
@@ -48,13 +43,18 @@ def get_owner_profile(
     return success_response(data=user_data, message="Owner profile fetched successfully")
 
 
-@router.get("/dashboard", response_model=APIResponse[DashboardKPIsResponse])
+@router.get("/dashboard", response_model=APIResponse[DashboardKPIsResponse], status_code=status.HTTP_200_OK)
 def get_dashboard_kpis(
     session: SessionDep = None,
     current_user: User = require_admin
 ):
     """Fetch key gym metrics (active members, check-ins, etc.)"""
     gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            data=None
+        )
     dashboard_service = DashboardService(session=session)
     kpis_data = dashboard_service.get_user_kpis(
         user_id=current_user.id,
@@ -64,19 +64,24 @@ def get_dashboard_kpis(
     return success_response(data=kpis_data, message="Dashboard KPIs fetched successfully")
 
 
-@router.get("/gym", response_model=APIResponse[GymResponse])
+@router.get("/gym", response_model=APIResponse[GymResponse], status_code=status.HTTP_200_OK)
 def get_owner_gym_info(
     session: SessionDep = None,
     current_user: User = require_admin
 ):
     """Get owner's gym information"""
     gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            data=None
+        )
     gym_service = GymService(session=session)
     gym_data = gym_service.get_gym(gym.id)
     return success_response(data=gym_data, message="Gym information fetched successfully")
 
 
-@router.get("/members/{member_id}", response_model=APIResponse[UserResponse])
+@router.get("/members/{member_id}", response_model=APIResponse[UserResponse], status_code=status.HTTP_200_OK)
 def get_member(
     member_id: str,
     session: SessionDep = None,
@@ -84,19 +89,24 @@ def get_member(
 ):
     """Get a member by ID"""
     gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            data=None
+        )
     user_service = UserService(session=session)
     member = user_service.get_user(member_id)
     
     if member.gym_id != gym.id or member.role != "MEMBER":
-        raise HTTPException(
-            status_code=404,
-            detail="Member not found in your gym"
+        return failure_response(
+            message="Member not found in your gym",
+            data=None
         )
     
     return success_response(data=member, message="Member data fetched successfully")
 
 
-@router.get("/staff/{staff_id}", response_model=APIResponse[UserResponse])
+@router.get("/staff/{staff_id}", response_model=APIResponse[UserResponse], status_code=status.HTTP_200_OK)
 def get_staff(
     staff_id: str,
     session: SessionDep = None,
@@ -104,19 +114,24 @@ def get_staff(
 ):
     """Get a staff member by ID"""
     gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            data=None
+        )
     user_service = UserService(session=session)
     staff = user_service.get_user(staff_id)
     
     if staff.gym_id != gym.id or staff.role != "STAFF":
-        raise HTTPException(
-            status_code=404,
-            detail="Staff not found in your gym"
+        return failure_response(
+            message="Staff not found in your gym",
+            data=None
         )
     
     return success_response(data=staff, message="Staff data fetched successfully")
 
 
-@router.get("/trainers/{trainer_id}", response_model=APIResponse[UserResponse])
+@router.get("/trainers/{trainer_id}", response_model=APIResponse[UserResponse], status_code=status.HTTP_200_OK)
 def get_trainer(
     trainer_id: str,
     session: SessionDep = None,
@@ -124,19 +139,24 @@ def get_trainer(
 ):
     """Get a trainer by ID"""
     gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            data=None
+        )
     user_service = UserService(session=session)
     trainer = user_service.get_user(trainer_id)
     
     if trainer.gym_id != gym.id or trainer.role != "TRAINER":
-        raise HTTPException(
-            status_code=404,
-            detail="Trainer not found in your gym"
+        return failure_response(
+            message="Trainer not found in your gym",
+            data=None
         )
     
     return success_response(data=trainer, message="Trainer data fetched successfully")
 
 
-@router.get("/plans/{plan_id}", response_model=APIResponse[PlanResponse])
+@router.get("/plans/{plan_id}", response_model=APIResponse[PlanResponse], status_code=status.HTTP_200_OK)
 def get_plan(
     plan_id: str,
     session: SessionDep = None,
@@ -144,19 +164,24 @@ def get_plan(
 ):
     """Get a plan by ID"""
     gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            data=None
+        )
     plan_service = PlanService(session=session)
     plan = plan_service.get_plan(plan_id)
     
     if plan.gym_id != gym.id:
-        raise HTTPException(
-            status_code=404,
-            detail="Plan not found in your gym"
+        return failure_response(
+            message="Plan not found in your gym",
+            data=None
         )
     
     return success_response(data=plan, message="Plan fetched successfully")
 
 
-@router.get("/memberships/{membership_id}", response_model=APIResponse[MembershipResponse])
+@router.get("/memberships/{membership_id}", response_model=APIResponse[MembershipResponse], status_code=status.HTTP_200_OK)
 def get_membership(
     membership_id: str,
     session: SessionDep = None,
@@ -164,32 +189,42 @@ def get_membership(
 ):
     """Get a membership by ID"""
     gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            data=None
+        )
     membership_service = MembershipService(session=session)
     membership = membership_service.get_membership(membership_id)
     
     if membership.gym_id != gym.id:
-        raise HTTPException(
-            status_code=404,
-            detail="Membership not found in your gym"
+        return failure_response(
+            message="Membership not found in your gym",
+            data=None
         )
     
     return success_response(data=membership, message="Membership fetched successfully")
 
 
-@router.get("/announcements", response_model=APIResponse[AnnouncementListResponse])
+@router.get("/announcements", response_model=APIResponse[AnnouncementListResponse], status_code=status.HTTP_200_OK)
 def get_announcements(
     session: SessionDep = None,
     current_user: User = require_admin
 ):
     """Get all announcements for the owner's gym"""
     gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            data=None
+        )
     announcement_service = AnnouncementService(session=session)
     announcements = announcement_service.get_announcements_by_gym(gym_id=gym.id)
     announcements_data = AnnouncementListResponse(announcements=announcements)
     return success_response(data=announcements_data, message="Announcements fetched successfully")
 
 
-@router.get("/notifications", response_model=APIResponse[NotificationListResponse])
+@router.get("/notifications", response_model=APIResponse[NotificationListResponse], status_code=status.HTTP_200_OK)
 def get_notifications(
     limit: Optional[int] = Query(100, description="Limit number of results"),
     offset: int = Query(0, description="Offset for pagination"),
@@ -198,6 +233,11 @@ def get_notifications(
 ):
     """Get all notifications for the owner's gym"""
     gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            data=None
+        )
     notification_service = NotificationService(session=session)
     notifications_data = notification_service.get_notifications_by_gym(
         gym_id=gym.id,

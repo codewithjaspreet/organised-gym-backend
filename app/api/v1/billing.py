@@ -1,4 +1,4 @@
-from fastapi import APIRouter, status, HTTPException, Depends
+from fastapi import APIRouter, status, Depends
 from sqlmodel import select
 from app.core.permissions import require_any_authenticated, require_admin, require_admin_or_staff, check_gym_ownership
 from app.db.db import SessionDep
@@ -6,8 +6,9 @@ from app.models.user import User, Role
 from app.models.billing import Payment
 from app.schemas.billing import PaymentCreate, PaymentResponse, PaymentUpdate
 from app.schemas.response import APIResponse
-from app.utils.response import success_response
+from app.utils.response import success_response, failure_response
 from app.services.billing_service import BillingService
+from app.core.exceptions import NotFoundError
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -19,14 +20,20 @@ def create_payment(
 ):
     # Members can create their own payments
     if payment.user_id != current_user.id and current_user.role != Role.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only create payments for yourself"
+        return failure_response(
+            message="You can only create payments for yourself",
+            status_code=status.HTTP_403_FORBIDDEN
         )
     
-    billing_service = BillingService(session=session)
-    payment_data = billing_service.create_payment(payment)
-    return success_response(data=payment_data, message="Payment created successfully")
+    try:
+        billing_service = BillingService(session=session)
+        payment_data = billing_service.create_payment(payment)
+        return success_response(data=payment_data, message="Payment created successfully")
+    except Exception as e:
+        return failure_response(
+            message=str(e.detail) if hasattr(e, 'detail') else "Failed to create payment",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
 
 @router.get("/{payment_id}", response_model=APIResponse[PaymentResponse])
 def get_payment(
@@ -38,19 +45,28 @@ def get_payment(
     stmt = select(Payment).where(Payment.id == payment_id)
     db_payment = session.exec(stmt).first()
     if not db_payment:
-        raise HTTPException(status_code=404, detail="Payment not found")
+        return failure_response(
+            message="Payment not found",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
     
     if current_user.role in [Role.ADMIN, Role.STAFF]:
         check_gym_ownership(db_payment.gym_id, current_user, session)
     elif db_payment.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only access your own payments"
+        return failure_response(
+            message="You can only access your own payments",
+            status_code=status.HTTP_403_FORBIDDEN
         )
     
-    billing_service = BillingService(session=session)
-    payment_data = billing_service.get_payment(payment_id)
-    return success_response(data=payment_data, message="Payment fetched successfully")
+    try:
+        billing_service = BillingService(session=session)
+        payment_data = billing_service.get_payment(payment_id)
+        return success_response(data=payment_data, message="Payment fetched successfully")
+    except NotFoundError as e:
+        return failure_response(
+            message=str(e.detail) if hasattr(e, 'detail') else "Payment not found",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
 
 @router.put("/{payment_id}", response_model=APIResponse[PaymentResponse])
 def update_payment(
@@ -63,13 +79,22 @@ def update_payment(
     stmt = select(Payment).where(Payment.id == payment_id)
     db_payment = session.exec(stmt).first()
     if not db_payment:
-        raise HTTPException(status_code=404, detail="Payment not found")
+        return failure_response(
+            message="Payment not found",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
     
     check_gym_ownership(db_payment.gym_id, current_user, session)
     
-    billing_service = BillingService(session=session)
-    updated_payment = billing_service.update_payment(payment_id, payment)
-    return success_response(data=updated_payment, message="Payment updated successfully")
+    try:
+        billing_service = BillingService(session=session)
+        updated_payment = billing_service.update_payment(payment_id, payment)
+        return success_response(data=updated_payment, message="Payment updated successfully")
+    except NotFoundError as e:
+        return failure_response(
+            message=str(e.detail) if hasattr(e, 'detail') else "Payment not found",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
 
 @router.delete("/{payment_id}", response_model=APIResponse[dict])
 def delete_payment(
@@ -81,11 +106,20 @@ def delete_payment(
     stmt = select(Payment).where(Payment.id == payment_id)
     db_payment = session.exec(stmt).first()
     if not db_payment:
-        raise HTTPException(status_code=404, detail="Payment not found")
+        return failure_response(
+            message="Payment not found",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
     
     check_gym_ownership(db_payment.gym_id, current_user, session)
     
-    billing_service = BillingService(session=session)
-    billing_service.delete_payment(payment_id)
-    return success_response(data=None, message="Payment deleted successfully")
+    try:
+        billing_service = BillingService(session=session)
+        billing_service.delete_payment(payment_id)
+        return success_response(data=None, message="Payment deleted successfully")
+    except NotFoundError as e:
+        return failure_response(
+            message=str(e.detail) if hasattr(e, 'detail') else "Payment not found",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
 
