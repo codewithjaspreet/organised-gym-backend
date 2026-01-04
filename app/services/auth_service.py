@@ -1,8 +1,9 @@
 from sqlmodel import select
-from app.core.exceptions import EmailAlreadyExistsError, InvalidCredentialsError, PhoneAlreadyExistsError, UserAlreadyExistsError, UserNameAlreadyExistsError
+from app.core.exceptions import EmailAlreadyExistsError, InvalidCredentialsError, PhoneAlreadyExistsError, UserAlreadyExistsError, UserNameAlreadyExistsError, NotFoundError
 from app.core.security import create_access_token, create_refresh_token, get_password_hash, verify_password
 from app.db.db import SessionDep
 from app.models.user import User
+from app.models.role import Role
 from app.schemas.auth import LoginRequest, LoginResponse
 from app.schemas.user import UserCreate, UserResponse
 
@@ -13,11 +14,17 @@ class AuthService:
 
     
     def register(self, user: UserCreate) -> UserResponse:
-            # 1. Generate username if not provided
+            # 1. Get role_id from role name
+            stmt = select(Role).where(Role.name == user.role.upper())
+            role = self.session.exec(stmt).first()
+            if not role:
+                raise NotFoundError(detail=f"Role '{user.role}' not found")
+            
+            # 2. Generate username if not provided
             if not user.user_name:
                 user.user_name = self._generate_username(user.email, user.name)
             
-            # 2. Check if username exists and generate a unique one
+            # 3. Check if username exists and generate a unique one
             stmt = select(User).where(User.user_name == user.user_name)
             existing = self.session.exec(stmt).first()
             if existing:
@@ -30,10 +37,10 @@ class AuthService:
                     existing = self.session.exec(stmt).first()
                     counter += 1
             
-            # 3. Hash password
+            # 4. Hash password
             hashed_password = get_password_hash(user.password)
             
-            # 4. Create user object
+            # 5. Create user object
             db_user = User(
                 user_name=user.user_name,
                 name=user.name,
@@ -48,16 +55,17 @@ class AuthService:
                 postal_code=user.postal_code,
                 country=user.country,
                 dob=user.dob,
-                role=user.role,
+                role_id=role.id,
+                gym_id=user.gym_id,
                 is_active=True
             )
             
-            # 5. Save to database
+            # 6. Save to database
             self.session.add(db_user)
             self.session.commit()
             self.session.refresh(db_user)
             
-            # 6. Return UserResponse (exclude password_hash)
+            # 7. Return UserResponse (exclude password_hash)
             user_dict = db_user.model_dump(exclude={"password_hash"})
             return UserResponse(**user_dict)
     
@@ -113,8 +121,13 @@ class AuthService:
         if not user.is_active:
             raise InvalidCredentialsError(detail="User account is inactive")
         
-        # 4. Create tokens
-        token_data = {"sub": user.id, "email": user.email, "role": user.role.value}
+        # 4. Get role name for token
+        stmt = select(Role).where(Role.id == user.role_id)
+        role = self.session.exec(stmt).first()
+        role_name = role.name if role else "MEMBER"
+        
+        # 5. Create tokens
+        token_data = {"sub": user.id, "email": user.email, "role": role_name}
         access_token = create_access_token(data=token_data)
         refresh_token = create_refresh_token(data=token_data)
         
@@ -124,3 +137,15 @@ class AuthService:
             refresh_token=refresh_token,
             token_type="bearer"
         )
+
+    def forget_password(self, email:str) -> None:
+        # otp on mail
+        pass
+
+    def verify_otp(self, email:str, otp:str) -> None:
+        # verify otp
+        pass
+
+    def update_password(self, user_id:str, new_password:str) -> None:
+        # update password
+        pass
