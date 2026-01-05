@@ -1,24 +1,29 @@
 FROM python:3.13-slim-bookworm
 
+# Install system dependencies
 RUN apt-get update && apt-get install --no-install-recommends -y \
-        build-essential && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    build-essential \
+    curl \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
+# Install uv
 ADD https://astral.sh/uv/install.sh /install.sh
-RUN chmod -R 755 /install.sh && /install.sh && rm /install.sh
+RUN chmod 755 /install.sh && /install.sh && rm /install.sh
 
-# Set up the UV environment path correctly
+# Make uv available
 ENV PATH="/root/.local/bin:${PATH}"
 
 WORKDIR /app
 
 COPY . .
 
+# Install dependencies using uv
 RUN uv sync
 
-ENV PATH="/app/.venv/bin:{$PATH}"
+# Activate virtual environment
+ENV PATH="/app/.venv/bin:${PATH}"
 
-# Expose the specified port for FastAPI
-EXPOSE $PORT
+EXPOSE 80
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80"]
