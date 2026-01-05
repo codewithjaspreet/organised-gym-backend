@@ -2,8 +2,9 @@ from sqlmodel import select
 from app.core.exceptions import NotFoundError, UserNameAlreadyExistsError, UserNotFoundError
 from app.db.db import SessionDep
 from app.models.user import User
+from app.models.role import Role
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
-
+from app.core.security import get_password_hash
 
 class UserService:
 
@@ -27,6 +28,16 @@ class UserService:
 
         # Update only provided fields
         update_data = user_update.model_dump(exclude_unset=True)
+        
+        # Handle role name to role_id conversion
+        if 'role' in update_data:
+            role_name = update_data.pop('role')
+            stmt = select(Role).where(Role.name == role_name.upper())
+            role = self.session.exec(stmt).first()
+            if not role:
+                raise NotFoundError(detail=f"Role '{role_name}' not found")
+            update_data['role_id'] = role.id
+        
         for field, value in update_data.items():
             setattr(user, field, value)
 
@@ -47,11 +58,12 @@ class UserService:
         return None
 
     def create_user(self, user: UserCreate) -> UserResponse:
-        # Generate username if not provided
+
+        # 1. Generate username if not provided
         if not user.user_name:
             user.user_name = self._generate_username(user.email, user.name)
         
-        # Check if username exists and generate a unique one
+        # 2. Check if username exists and generate a unique one
         stmt = select(User).where(User.user_name == user.user_name)
         existing = self.session.exec(stmt).first()
         if existing:
@@ -64,9 +76,9 @@ class UserService:
                 existing = self.session.exec(stmt).first()
                 counter += 1
         
-        # Hash password if provided
-        from app.core.security import get_password_hash
-        user_dict = user.model_dump()
+        # 3. Hash password if provided
+        user_dict = user.model_dump()  
+     
         if 'password' in user_dict:
             user_dict['password_hash'] = get_password_hash(user_dict.pop('password'))
         

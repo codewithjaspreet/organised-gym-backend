@@ -2,10 +2,11 @@ from fastapi import APIRouter, status, Depends, Query
 from sqlmodel import select
 from typing import Optional, List
 from datetime import date
-from app.core.permissions import require_admin
+from app.core.permission_guard import require_permission, require_any_permission
 from app.db.db import SessionDep
 from app.models.user import User
 from app.models.gym import Gym
+from app.models.role import Role
 from app.schemas.announcement import AnnouncementCreate, AnnouncementResponse, AnnouncementListResponse
 from app.schemas.notification import NotificationCreate, NotificationResponse, NotificationListResponse
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
@@ -28,7 +29,7 @@ def get_owner_gym(current_user: User, session: SessionDep):
 @router.get("/dashboard", response_model=APIResponse[DashboardKPIsResponse])
 def get_dashboard_kpis(
     session: SessionDep = None,
-    current_user: User = require_admin
+    current_user: User = require_any_permission("user_get_all", "gym_get_own")
 ):
     """Fetch key gym metrics (active members, check-ins, etc.)"""
     gym = get_owner_gym(current_user, session)
@@ -38,9 +39,14 @@ def get_dashboard_kpis(
             status_code=status.HTTP_404_NOT_FOUND
         )
     dashboard_service = DashboardService(session=session)
+    # Get role name from role_id
+    stmt = select(Role).where(Role.id == current_user.role_id)
+    role = session.exec(stmt).first()
+    role_name = role.name if role else "MEMBER"
+    
     kpis_data = dashboard_service.get_user_kpis(
         user_id=current_user.id,
-        role=current_user.role,
+        role=role_name,
         gym_id=gym.id
     )
     return success_response(data=kpis_data, message="Dashboard KPIs fetched successfully")
@@ -51,7 +57,7 @@ def get_dashboard_kpis(
 def create_announcement(
     announcement: AnnouncementCreate,
     session: SessionDep = None,
-    current_user: User = require_admin
+    current_user: User = require_permission("gym_get_own")  # Can create announcements if they can access their gym
 ):
     """Create announcement"""
     gym = get_owner_gym(current_user, session)
@@ -81,7 +87,7 @@ def create_announcement(
 @router.get("/announcements", response_model=APIResponse[AnnouncementListResponse])
 def get_announcements(
     session: SessionDep = None,
-    current_user: User = require_admin
+    current_user: User = require_permission("gym_get_own")
 ):
     """Get announcements"""
     gym = get_owner_gym(current_user, session)
@@ -101,7 +107,7 @@ def get_announcements(
 def create_notification(
     notification: NotificationCreate,
     session: SessionDep = None,
-    current_user: User = require_admin
+    current_user: User = require_permission("user_get_all")  # Can create notifications if they can see users
 ):
     """Create notification"""
     gym = get_owner_gym(current_user, session)
@@ -134,7 +140,7 @@ def get_notifications(
     limit: Optional[int] = Query(100, description="Limit number of results"),
     offset: int = Query(0, description="Offset for pagination"),
     session: SessionDep = None,
-    current_user: User = require_admin
+    current_user: User = require_permission("gym_get_own")
 ):
     """Get notifications"""
     gym = get_owner_gym(current_user, session)
@@ -157,9 +163,16 @@ def get_notifications(
 def add_member(
     user: UserCreate,
     session: SessionDep = None,
-    current_user: User = require_admin
+    current_user: User = require_permission("user_create")
 ):
-    """Add new member to gym"""
+    """Add new member to gym. Requires user_create permission. Owner must pass gym_id explicitly"""
+    if not user.gym_id:
+        return failure_response(
+            message="gym_id is required when creating a member",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Validate that the gym exists and belongs to this owner
     gym = get_owner_gym(current_user, session)
     if not gym:
         return failure_response(
@@ -167,10 +180,16 @@ def add_member(
             status_code=status.HTTP_404_NOT_FOUND
         )
     
-    # Set the gym_id for the new member
+    if user.gym_id != gym.id:
+        return failure_response(
+            message="You can only create members for your own gym",
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    # Override role to MEMBER
     user_dict = user.model_dump()
-    user_dict["gym_id"] = gym.id
-    user_dict["role"] = user.role if user.role else "MEMBER"
+    user_dict["role"] = "MEMBER"  # Set role name to MEMBER
+    # gym_id is already in user_dict from model_dump
     
     user_service = UserService(session=session)
     member_data = user_service.create_user(UserCreate(**user_dict))
@@ -181,9 +200,9 @@ def add_member(
 @router.get("/profile", response_model=APIResponse[UserResponse])
 def get_owner_profile(
     session: SessionDep = None,
-    current_user: User = require_admin
+    current_user: User = require_any_permission("user_get_all", "user_get_own")
 ):
-    """Get owner profile"""
+    """Get owner profile. Requires user_get_all or user_get_own permission."""
     user_service = UserService(session=session)
     user_data = user_service.get_user(current_user.id)
     return success_response(data=user_data, message="Owner profile fetched successfully")
@@ -193,7 +212,7 @@ def get_owner_profile(
 def update_owner_profile(
     user: UserUpdate,
     session: SessionDep = None,
-    current_user: User = require_admin
+    current_user: User = require_permission("user_update")
 ):
     """Update owner profile"""
     user_service = UserService(session=session)

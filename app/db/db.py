@@ -13,7 +13,9 @@ from app.models.billing import Payment
 from app.models.attendance import Attendance
 from app.models.notification import Notification
 from app.models.announcement import Announcement
-from app.models.notification import Notification
+from app.models.permission import Permission
+from app.models.role import Role
+from app.models.role_permission import RolePermission
 
 def get_session():
     with Session(engine) as session:

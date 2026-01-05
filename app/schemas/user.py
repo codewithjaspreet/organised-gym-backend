@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Optional
 from pydantic import BaseModel
-from app.models.user import Gender, Role
+from app.models.user import Gender
 
 
 
@@ -20,7 +20,7 @@ class UserCreate(BaseModel):
     country: str
     dob: date
     gym_id: Optional[str] = None
-    role: Role = Role.MEMBER
+    role: str  # Role name: "OG", "ADMIN", "MEMBER", "TRAINER", "STAFF"
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
@@ -35,7 +35,7 @@ class UserUpdate(BaseModel):
     country: Optional[str] = None
     photo_url: Optional[str] = None
     is_active: Optional[bool] = None
-    role: Optional[Role] = None
+    role: Optional[str] = None  # Role name
     gym_id: Optional[str] = None
 
 class UserResponse(BaseModel):
@@ -48,6 +48,7 @@ class UserResponse(BaseModel):
     address_line1: str
     address_line2: Optional[str] = None
     gym_id: Optional[str] = None
+    role_id: str
     city: str
     state: str
     postal_code: str

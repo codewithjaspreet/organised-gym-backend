@@ -34,7 +34,14 @@ def create_member(
     session: SessionDep = None,
     current_user: User = require_admin
 ):
-    """Create a new member for the owner's gym"""
+    """Create a new member for the owner's gym. Owner must pass gym_id explicitly"""
+    if not user.gym_id:
+        return failure_response(
+            message="gym_id is required when creating a member",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Validate that the gym exists and belongs to this owner
     gym = get_owner_gym(current_user, session)
     if not gym:
         return failure_response(
@@ -42,9 +49,15 @@ def create_member(
             status_code=status.HTTP_404_NOT_FOUND
         )
     
+    if user.gym_id != gym.id:
+        return failure_response(
+            message="You can only create members for your own gym",
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
     user_dict = user.model_dump()
-    user_dict["gym_id"] = gym.id
     user_dict["role"] = "MEMBER"
+    # gym_id is already in user_dict from model_dump
     
     user_service = UserService(session=session)
     member_data = user_service.create_user(UserCreate(**user_dict))
