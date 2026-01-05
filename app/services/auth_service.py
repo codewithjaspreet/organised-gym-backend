@@ -121,21 +121,35 @@ class AuthService:
         if not user.is_active:
             raise InvalidCredentialsError(detail="User account is inactive")
         
-        # 4. Get role name for token
+        # 4. Update device_token, app_version, and platform if provided
+        if req.device_token is not None:
+            user.device_token = req.device_token
+        if req.app_version is not None:
+            user.app_version = req.app_version
+        if req.platform is not None:
+            user.platform = req.platform  # Already normalized by validator
+        
+        # Save user updates
+        self.session.add(user)
+        self.session.commit()
+        self.session.refresh(user)
+        
+        # 5. Get role name for token
         stmt = select(Role).where(Role.id == user.role_id)
         role = self.session.exec(stmt).first()
         role_name = role.name if role else "MEMBER"
         
-        # 5. Create tokens
+        # 6. Create tokens
         token_data = {"sub": user.id, "email": user.email, "role": role_name}
         access_token = create_access_token(data=token_data)
         refresh_token = create_refresh_token(data=token_data)
         
-        # 5. Return tokens
+        # 7. Return tokens with role
         return LoginResponse(
             access_token=access_token,
             refresh_token=refresh_token,
-            token_type="bearer"
+            token_type="bearer",
+            role=role_name
         )
 
     def forget_password(self, email:str) -> None:
