@@ -35,7 +35,7 @@ def get_user(
     session: SessionDep,
     current_user: User = require_any_authenticated
 ):
-    check_ownership_or_admin(user_id, current_user)
+    check_ownership_or_admin(user_id, current_user, session)
     try:
         user_service = UserService(session=session)
         user_data = user_service.get_user(user_id)
@@ -53,7 +53,7 @@ def update_user(
     session: SessionDep,
     current_user: User = require_any_authenticated
 ):
-    check_ownership_or_admin(user_id, current_user)
+    check_ownership_or_admin(user_id, current_user, session)
     try:
         user_service = UserService(session=session)
         updated_user = user_service.update_user(user_id, user)
@@ -93,10 +93,38 @@ def get_dashboard_kpis(
     - MEMBER: Personal stats (own check-ins, check-outs, fee status)
     - STAFF/TRAINER: Limited gym stats (check-ins, check-outs only)
     """
+    from sqlmodel import select
+    from app.models.role import Role as RoleModel
+    from app.models.user import RoleEnum
+    
+    # Get role name from role_id
+    if not current_user.role_id:
+        return failure_response(
+            message="User has no role assigned",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    
+    stmt = select(RoleModel).where(RoleModel.id == current_user.role_id)
+    role = session.exec(stmt).first()
+    if not role:
+        return failure_response(
+            message="User role not found",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    
+    # Convert role name to RoleEnum
+    try:
+        user_role = RoleEnum(role.name)
+    except ValueError:
+        return failure_response(
+            message=f"Invalid role: {role.name}",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    
     dashboard_service = DashboardService(session=session)
     kpis_data = dashboard_service.get_user_kpis(
         user_id=current_user.id,
-        role=current_user.role,
+        role=user_role,
         gym_id=current_user.gym_id
     )
     return success_response(data=kpis_data, message="Dashboard KPIs fetched successfully")

@@ -76,9 +76,19 @@ class UserService:
                 existing = self.session.exec(stmt).first()
                 counter += 1
         
-        # 3. Hash password if provided
-        user_dict = user.model_dump()  
-     
+        # 3. Convert role name to role_id if role is provided
+        user_dict = user.model_dump()
+        if 'role' in user_dict and user_dict['role']:
+            role_name = user_dict.pop('role')
+            stmt = select(Role).where(Role.name == role_name.upper())
+            role = self.session.exec(stmt).first()
+            if not role:
+                raise NotFoundError(detail=f"Role '{role_name}' not found")
+            user_dict['role_id'] = role.id
+        elif 'role_id' not in user_dict:
+            raise NotFoundError(detail="Role is required when creating a user")
+        
+        # 4. Hash password if provided
         if 'password' in user_dict:
             user_dict['password_hash'] = get_password_hash(user_dict.pop('password'))
         

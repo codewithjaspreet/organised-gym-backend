@@ -1,7 +1,9 @@
 from fastapi import HTTPException, status, Depends
 from typing import List
-from app.core.dependencies import get_current_user
-from app.models.user import User, Role
+from sqlmodel import select, Session
+from app.core.dependencies import get_current_user, get_session
+from app.models.user import User, RoleEnum
+from app.models.role import Role
 
 
 async def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
@@ -14,41 +16,64 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
     return current_user
 
 
-def require_roles(*allowed_roles: Role):
+def _get_user_role_name(current_user: User, session: Session) -> str:
+    """Get the role name for a user from their role_id"""
+    if not current_user.role_id:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="User has no role assigned"
+        )
+    stmt = select(Role).where(Role.id == current_user.role_id)
+    role = session.exec(stmt).first()
+    if not role:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="User role not found"
+        )
+    return role.name
+
+
+def require_roles(*allowed_roles: RoleEnum):
     """Dependency factory to require specific roles"""
-    async def role_checker(current_user: User = Depends(get_current_active_user)) -> User:
-        if current_user.role not in allowed_roles:
+    async def role_checker(
+        current_user: User = Depends(get_current_active_user),
+        session: Session = Depends(get_session)
+    ) -> User:
+        user_role_name = _get_user_role_name(current_user, session)
+        allowed_role_names = [r.value for r in allowed_roles]
+        if user_role_name not in allowed_role_names:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Access denied. Required roles: {[r.value for r in allowed_roles]}"
+                detail=f"Access denied. Required roles: {allowed_role_names}"
             )
         return current_user
     return Depends(role_checker)
 
 
 # Specific role dependencies
-require_og = require_roles(Role.OG)
-require_admin = require_roles(Role.ADMIN)
-require_og_or_admin = require_roles(Role.OG, Role.ADMIN)
-require_admin_or_staff = require_roles(Role.ADMIN, Role.STAFF)
+require_og = require_roles(RoleEnum.OG)
+require_admin = require_roles(RoleEnum.ADMIN)
+require_og_or_admin = require_roles(RoleEnum.OG, RoleEnum.ADMIN)
+require_admin_or_staff = require_roles(RoleEnum.ADMIN, RoleEnum.STAFF)
 require_any_authenticated = Depends(get_current_active_user)
 
 
-def check_ownership_or_admin(user_id: str, current_user: User) -> None:
+def check_ownership_or_admin(user_id: str, current_user: User, session: Session) -> None:
     """Check if user is accessing their own resource or is admin"""
-    if user_id != current_user.id and current_user.role != Role.ADMIN:
+    user_role_name = _get_user_role_name(current_user, session)
+    if user_id != current_user.id and user_role_name != RoleEnum.ADMIN.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can only access your own resources"
         )
 
 
-def check_gym_ownership(gym_id: str, current_user: User, session) -> None:
+def check_gym_ownership(gym_id: str, current_user: User, session: Session) -> None:
     """Check if user owns the gym or is OG"""
-    from sqlmodel import select
     from app.models.gym import Gym
     
-    if current_user.role == Role.OG:
+    user_role_name = _get_user_role_name(current_user, session)
+    if user_role_name == RoleEnum.OG.value:
         return  # OG can access any gym
     
     stmt = select(Gym).where(Gym.id == gym_id, Gym.owner_id == current_user.id)

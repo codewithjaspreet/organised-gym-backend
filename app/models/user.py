@@ -80,6 +80,14 @@ class User(SQLModel, table=True):
         description="The user's device token for notifications",
         nullable=True
     )
+    app_version: Optional[str] = Field(
+        description="The app version the user is using",
+        nullable=True
+    )
+    platform: Optional[str] = Field(
+        description="The platform: android or ios",
+        nullable=True
+    )
     created_at: datetime = Field(
         description="The user's creation date",
         default_factory=datetime.now
