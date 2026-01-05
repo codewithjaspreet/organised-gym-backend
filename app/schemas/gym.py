@@ -1,11 +1,11 @@
 from datetime import datetime
 from sqlmodel import select
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import List, Optional
 
 
 class GymCreate(BaseModel):
-    owner_id: str = Field(description="The owner's user id")
+    owner_id: str = Field(description="The owner's user id (ADMIN role user)")
     name: str = Field(description="The gym's name", min_length=1)
     logo: Optional[str] = Field(description="The gym's logo URL", nullable=True)
     address_line1: str = Field(description="The gym's address line 1", min_length=4)
@@ -35,6 +35,7 @@ class GymUpdate(BaseModel):
 
 class GymResponse(BaseModel):
     id: str
+    owner_id: str
     name: str
     logo: Optional[str] = None
     address_line1: str
@@ -47,6 +48,9 @@ class GymResponse(BaseModel):
     opening_hours: Optional[str] = None
     is_active: bool
     created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
 
 class GymListResponse(BaseModel):
     gyms: List[GymResponse]

@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from app.models.membership import Membership
     from app.models.notification import Notification
     from app.models.announcement import Announcement
+    from app.models.role import Role
 
 
 class Gender(str, Enum):
@@ -20,12 +21,16 @@ class Gender(str, Enum):
     OTHER = "OTHER"
 
 
-class Role(str, Enum):
+# Keep Role enum for backward compatibility and quick checks
+class RoleEnum(str, Enum):
     OG = "OG"  # Platform owner
     ADMIN = "ADMIN"  # Gym owner
     MEMBER = "MEMBER"
     TRAINER = "TRAINER"
     STAFF = "STAFF"
+
+# Alias for backward compatibility
+Role = RoleEnum
 
 
 class User(SQLModel, table=True):
@@ -66,7 +71,11 @@ class User(SQLModel, table=True):
         description="Whether the user is active",
         default=True
     )
-    role: Role = Field(description="The user's role")
+    role_id: str = Field(
+        description="The user's role id",
+        foreign_key="roles.id",
+        index=True
+    )
     device_token: Optional[str] = Field(
         description="The user's device token for notifications",
         nullable=True
@@ -82,6 +91,7 @@ class User(SQLModel, table=True):
     )
     
     # Relationships
+    role_ref: Optional["Role"] = Relationship(back_populates="users")
     gym: Optional["Gym"] = Relationship(
         back_populates="members",
         sa_relationship_kwargs={"foreign_keys": "[User.gym_id]"}
