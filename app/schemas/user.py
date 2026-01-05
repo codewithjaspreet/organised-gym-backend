@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from app.models.user import Gender
 
 
@@ -21,6 +21,19 @@ class UserCreate(BaseModel):
     dob: date
     gym_id: Optional[str] = None
     role: str  # Role name: "OG", "ADMIN", "MEMBER", "TRAINER", "STAFF"
+    device_token: Optional[str] = None
+    app_version: Optional[str] = None
+    platform: Optional[str] = None
+    
+    @field_validator('platform')
+    @classmethod
+    def validate_platform(cls, v):
+        if v is not None:
+            v_lower = v.lower()
+            if v_lower not in ["android", "ios"]:
+                raise ValueError("Platform must be either 'android' or 'ios'")
+            return v_lower
+        return v
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
