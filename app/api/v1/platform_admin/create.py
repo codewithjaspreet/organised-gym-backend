@@ -25,6 +25,7 @@ def create_owner(
 ):
     """Create a new gym owner (ADMIN role). Requires user_create permission."""
     user_dict = user.model_dump()
+    user_dict["role"] = "ADMIN"  # Override role to ADMIN
     user_service = UserService(session=session)
     owner_data = user_service.create_user(UserCreate(**user_dict))
     return success_response(data=owner_data, message="Owner created successfully")
