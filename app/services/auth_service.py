@@ -5,7 +5,7 @@ from app.db.db import SessionDep
 from app.models.user import User
 from app.models.role import Role
 from app.schemas.auth import LoginRequest, LoginResponse
-from app.schemas.user import UserCreate, UserResponse
+from app.schemas.user import UserCreate
 
 class AuthService:
 
@@ -13,7 +13,7 @@ class AuthService:
         self.session = session
 
     
-    def register(self, user: UserCreate) -> UserResponse:
+    def register(self, user: UserCreate) -> LoginResponse:
             # 1. Get role_id from role name
             stmt = select(Role).where(Role.name == user.role.upper())
             role = self.session.exec(stmt).first()
@@ -57,17 +57,32 @@ class AuthService:
                 dob=user.dob,
                 role_id=role.id,
                 gym_id=user.gym_id,
+                device_token=user.device_token,
+                app_version=user.app_version,
+                platform=user.platform,  # Already normalized by validator
                 is_active=True
             )
             
-            # 6. Save to database
+            # 7. Save to database
             self.session.add(db_user)
             self.session.commit()
             self.session.refresh(db_user)
             
-            # 7. Return UserResponse (exclude password_hash)
-            user_dict = db_user.model_dump(exclude={"password_hash"})
-            return UserResponse(**user_dict)
+            # 8. Get role name for token
+            role_name = role.name
+            
+            # 9. Create tokens (auto-login)
+            token_data = {"sub": db_user.id, "email": db_user.email, "role": role_name}
+            access_token = create_access_token(data=token_data)
+            refresh_token = create_refresh_token(data=token_data)
+            
+            # 10. Return LoginResponse with tokens
+            return LoginResponse(
+                access_token=access_token,
+                refresh_token=refresh_token,
+                token_type="bearer",
+                role=role_name
+            )
     
     def _generate_username(self, email: str, name: str) -> str:
         """
