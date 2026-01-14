@@ -149,3 +149,30 @@ def delete_membership(
     membership_service.delete_membership(membership_id)
     return success_response(data=None, message="Membership deleted successfully")
 
+
+@router.delete("/rules/{rule_id}", response_model=APIResponse[dict])
+def delete_gym_rule(
+    rule_id: str,
+    session: SessionDep = None,
+    current_user: User = require_admin
+):
+    """Delete a gym rule"""
+    gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    
+    gym_service = GymService(session=session)
+    existing_rule = gym_service.get_gym_rule(rule_id)
+    
+    if existing_rule.gym_id != gym.id:
+        return failure_response(
+            message="Rule not found in your gym",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    
+    gym_service.delete_gym_rule(rule_id)
+    return success_response(data=None, message="Gym rule deleted successfully")
+
