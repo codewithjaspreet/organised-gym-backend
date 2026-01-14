@@ -1,6 +1,6 @@
 from datetime import date, datetime
-from typing import Optional
-from pydantic import BaseModel, field_validator
+from typing import List, Optional
+from pydantic import BaseModel, Field, field_validator
 from app.models.user import Gender
 
 
@@ -20,6 +20,7 @@ class UserCreate(BaseModel):
     country: str
     dob: date
     gym_id: Optional[str] = None
+    plan_id: Optional[str] = None
     role: str  # Role name: "OG", "ADMIN", "MEMBER", "TRAINER", "STAFF"
     device_token: Optional[str] = None
     app_version: Optional[str] = None
@@ -50,6 +51,7 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
     role: Optional[str] = None  # Role name
     gym_id: Optional[str] = None
+    plan_id: Optional[str] = None
 
 class UserResponse(BaseModel):
     id: str
@@ -61,11 +63,20 @@ class UserResponse(BaseModel):
     address_line1: str
     address_line2: Optional[str] = None
     gym_id: Optional[str] = None
+    plan_id: Optional[str] = None
     role_id: str
     city: str
     state: str
     postal_code: str
     country: str
     created_at: datetime
+
+
+class MemberListResponse(BaseModel):
+    members: List[UserResponse] = Field(description="The list of members")
+    total: int = Field(description="Total number of members")
+    page: int = Field(description="Current page number")
+    page_size: int = Field(description="Number of items per page")
+    has_next: bool = Field(description="Whether there are more pages")
 
 

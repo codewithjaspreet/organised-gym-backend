@@ -18,7 +18,7 @@ class AnnouncementResponse(BaseModel):
     user_id: str = Field(description="The user id")
     gym_id: str = Field(description="The gym id")
     created_at: datetime = Field(description="The announcement creation date")
-    updated_at: datetime = Field(description="The announcement update date")
+    updated_at: Optional[datetime] = Field(description="The announcement update date", default=None)
 
 
 class AnnouncementListResponse(BaseModel):

@@ -25,7 +25,7 @@ class AnnouncementService:
         self.session.commit()
         self.session.refresh(db_announcement)
         
-        return AnnouncementResponse.model_validate(db_announcement)
+        return AnnouncementResponse.model_validate(db_announcement.model_dump())
 
     def get_announcements_by_gym(self, gym_id: str) -> List[AnnouncementResponse]:
         """Get all announcements for a gym"""
@@ -33,7 +33,7 @@ class AnnouncementService:
         stmt = stmt.order_by(Announcement.created_at.desc())
         
         announcements = self.session.exec(stmt).all()
-        return [AnnouncementResponse.model_validate(a) for a in announcements]
+        return [AnnouncementResponse.model_validate(a.model_dump()) for a in announcements]
 
     def get_announcement_by_id(self, announcement_id: str) -> AnnouncementResponse:
         """Get a single announcement by ID"""
@@ -42,7 +42,7 @@ class AnnouncementService:
         if not announcement:
             raise NotFoundError(detail=f"Announcement with id {announcement_id} not found")
         
-        return AnnouncementResponse.model_validate(announcement)
+        return AnnouncementResponse.model_validate(announcement.model_dump())
 
     def update_announcement(
         self,
@@ -65,7 +65,7 @@ class AnnouncementService:
         self.session.commit()
         self.session.refresh(db_announcement)
         
-        return AnnouncementResponse.model_validate(db_announcement)
+        return AnnouncementResponse.model_validate(db_announcement.model_dump())
 
     def delete_announcement(self, announcement_id: str) -> None:
         """Delete an announcement"""

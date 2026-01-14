@@ -57,7 +57,6 @@ def create_member(
     
     user_dict = user.model_dump()
     user_dict["role"] = "MEMBER"
-    # gym_id is already in user_dict from model_dump
     
     user_service = UserService(session=session)
     member_data = user_service.create_user(UserCreate(**user_dict))

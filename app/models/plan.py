@@ -7,6 +7,7 @@ from uuid import uuid4
 if TYPE_CHECKING:
     from app.models.gym import Gym
     from app.models.membership import Membership
+    from app.models.user import User
 
 
 class Plan(SQLModel, table=True):
@@ -40,4 +41,5 @@ class Plan(SQLModel, table=True):
     # Relationships
     gym: Optional["Gym"] = Relationship(back_populates="plans")
     memberships: List["Membership"] = Relationship(back_populates="plan")
+    users: List["User"] = Relationship(back_populates="plan")
 
