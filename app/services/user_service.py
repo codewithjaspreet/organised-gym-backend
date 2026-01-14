@@ -6,7 +6,13 @@ from app.db.db import SessionDep
 from app.models.user import RoleEnum, User
 from app.models.role import Role
 from app.models.membership import Membership
-from app.schemas.user import UserCreate, UserResponse, UserUpdate, MemberListResponse
+from app.models.plan import Plan
+from app.schemas.user import (
+    UserCreate, UserResponse, UserUpdate, 
+    MemberListResponse, MemberListItemResponse, 
+    MemberDetailResponse, CurrentPlanResponse,
+    AvailableMembersListResponse, AvailableMemberResponse
+)
 from app.core.security import get_password_hash
 
 class UserService:
@@ -22,6 +28,83 @@ class UserService:
         
         user_dict = user.model_dump(exclude={"password_hash"})
         return UserResponse(**user_dict)
+
+    def get_member_detail(self, member_id: str, gym_id: str) -> MemberDetailResponse:
+        """Get detailed member information with current plan"""
+        # Get user
+        stmt = select(User).where(User.id == member_id)
+        user = self.session.exec(stmt).first()
+        if not user:
+            raise UserNotFoundError(detail=f"Member with id {member_id} not found")
+        
+        # Verify it's a member and belongs to the gym
+        from app.models.role import Role as RoleModel
+        member_role_stmt = select(RoleModel).where(RoleModel.name == "MEMBER")
+        member_role = self.session.exec(member_role_stmt).first()
+        
+        if not member_role or user.role_id != member_role.id or user.gym_id != gym_id:
+            raise UserNotFoundError(detail=f"Member with id {member_id} not found")
+        
+        # Get role name
+        role_stmt = select(RoleModel).where(RoleModel.id == user.role_id)
+        role = self.session.exec(role_stmt).first()
+        role_name = role.name if role else "MEMBER"
+        
+        # Get current active membership and plan
+        today = date.today()
+        membership_stmt = select(Membership).where(
+            and_(
+                Membership.user_id == member_id,
+                Membership.gym_id == gym_id,
+                Membership.end_date >= today,
+                Membership.status == "active"
+            )
+        ).order_by(Membership.end_date.desc())
+        membership = self.session.exec(membership_stmt).first()
+        
+        current_plan = None
+        if membership:
+            plan_stmt = select(Plan).where(Plan.id == membership.plan_id)
+            plan = self.session.exec(plan_stmt).first()
+            
+            if plan:
+                # Calculate monthly price (approximate from total price and duration)
+                monthly_price = float(plan.price) / (plan.duration_days / 30.0) if plan.duration_days > 0 else float(plan.price)
+                
+                # Determine status
+                days_left = (membership.end_date - today).days
+                if days_left <= 7:
+                    status = "expiring_soon"
+                else:
+                    status = "active"
+                
+                current_plan = CurrentPlanResponse(
+                    plan_id=plan.id,
+                    plan_name=plan.name,
+                    expiry_date=membership.end_date.isoformat(),
+                    monthly_price=round(monthly_price, 2),
+                    status=status,
+                    days_left=days_left
+                )
+        
+        return MemberDetailResponse(
+            id=user.id,
+            name=user.name,
+            email=user.email,
+            phone=user.phone,
+            gender=user.gender,
+            dob=user.dob,
+            photo_url=user.photo_url,
+            role=role_name,
+            current_plan=current_plan,
+            address_line1=user.address_line1,
+            address_line2=user.address_line2,
+            city=user.city,
+            state=user.state,
+            postal_code=user.postal_code,
+            country=user.country,
+            created_at=user.created_at
+        )
 
     def get_all_members(
         self,
@@ -215,11 +298,77 @@ class UserService:
         # Execute query
         users = self.session.exec(stmt).all()
         
-        # Convert to response
-        members = [
-            UserResponse(**user.model_dump(exclude={"password_hash"}))
-            for user in users
-        ]
+        # Get plan info for each member
+        members = []
+        today = date.today()
+        
+        for user in users:
+            # Get active membership for this user
+            membership_stmt = select(Membership).where(
+                and_(
+                    Membership.user_id == user.id,
+                    Membership.gym_id == gym_id,
+                    Membership.end_date >= today
+                )
+            ).order_by(Membership.end_date.desc())
+            membership = self.session.exec(membership_stmt).first()
+            
+            plan_name = None
+            plan_status = None
+            plan_expiry_date = None
+            days_left = None
+            
+            if membership:
+                # Get plan details
+                plan_stmt = select(Plan).where(Plan.id == membership.plan_id)
+                plan = self.session.exec(plan_stmt).first()
+                
+                if plan:
+                    plan_name = plan.name
+                    plan_expiry_date = membership.end_date
+                    
+                    # Calculate days left
+                    if membership.end_date >= today:
+                        days_left = (membership.end_date - today).days
+                        if days_left <= 7:
+                            plan_status = "expiring_soon"
+                        else:
+                            plan_status = "active"
+                    else:
+                        plan_status = "expired"
+                        days_left = 0
+                else:
+                    plan_status = "expired" if membership.end_date < today else "active"
+            else:
+                # Check if user has any expired membership
+                expired_stmt = select(Membership).where(
+                    and_(
+                        Membership.user_id == user.id,
+                        Membership.gym_id == gym_id,
+                        Membership.end_date < today
+                    )
+                ).order_by(Membership.end_date.desc())
+                expired_membership = self.session.exec(expired_stmt).first()
+                
+                if expired_membership:
+                    plan_stmt = select(Plan).where(Plan.id == expired_membership.plan_id)
+                    plan = self.session.exec(plan_stmt).first()
+                    if plan:
+                        plan_name = plan.name
+                    plan_status = "expired"
+                    plan_expiry_date = expired_membership.end_date
+                    days_left = 0
+            
+            members.append(MemberListItemResponse(
+                id=user.id,
+                name=user.name,
+                email=user.email,
+                photo_url=user.photo_url,
+                plan_name=plan_name,
+                plan_status=plan_status,
+                plan_expiry_date=plan_expiry_date,
+                days_left=days_left
+            ))
         
         has_next = (page * page_size) < total
         
@@ -343,4 +492,37 @@ class UserService:
         # Final fallback - generate a random username
         random_part = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
         return f"user{random_part}"
+
+    def get_available_members(self) -> AvailableMembersListResponse:
+        """Get all members that are not assigned to any gym (gym_id is null)"""
+        from app.models.role import Role as RoleModel
+        
+        # Get MEMBER role id
+        member_role_stmt = select(RoleModel).where(RoleModel.name == "MEMBER")
+        member_role = self.session.exec(member_role_stmt).first()
+        
+        if not member_role:
+            return AvailableMembersListResponse(members=[])
+        
+        # Get members with gym_id = null
+        stmt = select(User).where(
+            and_(
+                User.role_id == member_role.id,
+                User.gym_id.is_(None)
+            )
+        ).order_by(User.name.asc())
+        
+        users = self.session.exec(stmt).all()
+        
+        members = [
+            AvailableMemberResponse(
+                id=user.id,
+                name=user.name,
+                email=user.email,
+                phone=user.phone
+            )
+            for user in users
+        ]
+        
+        return AvailableMembersListResponse(members=members)
 

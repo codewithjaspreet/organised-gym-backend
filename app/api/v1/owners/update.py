@@ -8,6 +8,7 @@ from app.schemas.user import UserResponse, UserUpdate
 from app.schemas.gym import GymResponse, GymUpdate
 from app.schemas.plan import PlanResponse, PlanUpdate
 from app.schemas.membership import MembershipResponse, MembershipUpdate
+from app.schemas.gym_rule import GymRuleResponse, GymRuleUpdate
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
 from app.services.user_service import UserService
@@ -187,4 +188,32 @@ def update_membership(
     
     updated_membership = membership_service.update_membership(membership_id, membership)
     return success_response(data=updated_membership, message="Membership updated successfully")
+
+
+@router.put("/rules/{rule_id}", response_model=APIResponse[GymRuleResponse])
+def update_gym_rule(
+    rule_id: str,
+    rule: GymRuleUpdate,
+    session: SessionDep = None,
+    current_user: User = require_admin
+):
+    """Update a gym rule"""
+    gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    
+    gym_service = GymService(session=session)
+    existing_rule = gym_service.get_gym_rule(rule_id)
+    
+    if existing_rule.gym_id != gym.id:
+        return failure_response(
+            message="Rule not found in your gym",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    
+    updated_rule = gym_service.update_gym_rule(rule_id, rule)
+    return success_response(data=updated_rule, message="Gym rule updated successfully")
 
