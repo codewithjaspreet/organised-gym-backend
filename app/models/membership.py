@@ -3,6 +3,10 @@ from typing import Optional, List
 from datetime import datetime, date
 from uuid import uuid4
 
+from app.models.gym import Gym
+from app.models.plan import Plan
+from app.models.user import User
+
 
 class Membership(SQLModel, table=True):
     __tablename__ = "memberships"
@@ -36,5 +40,5 @@ class Membership(SQLModel, table=True):
     user: Optional["User"] = Relationship(back_populates="memberships")
     gym: Optional["Gym"] = Relationship(back_populates="memberships")
     plan: Optional["Plan"] = Relationship(back_populates="memberships")
-    payments: List["Payment"] = Relationship(back_populates="membership")
+    payments: List["Payment"] = Relationship(back_populates="membership")  # pyright: ignore[reportUndefinedVariable]
 

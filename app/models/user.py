@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from app.models.notification import Notification
     from app.models.announcement import Announcement
     from app.models.role import Role
+    from app.models.plan import Plan
 
 
 class Gender(str, Enum):
@@ -97,6 +98,12 @@ class User(SQLModel, table=True):
         foreign_key="gyms.id",
         nullable=True
     )
+    plan_id: Optional[str] = Field(
+        description="The plan id this member has",
+        foreign_key="plans.id",
+        nullable=True,
+        index=True
+    )
     
     # Relationships
     role_ref: Optional["Role"] = Relationship(back_populates="users")
@@ -120,3 +127,4 @@ class User(SQLModel, table=True):
     )
     announcements: List["Announcement"] = Relationship(back_populates="user")
     memberships: List["Membership"] = Relationship(back_populates="user")
+    plan: Optional["Plan"] = Relationship(back_populates="users")

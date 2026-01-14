@@ -3,9 +3,10 @@ from sqlmodel import select
 from typing import Optional, List
 from app.core.permissions import require_admin
 from app.db.db import SessionDep
-from app.models.user import User
+from app.models.user import User, RoleEnum
 from app.models.gym import Gym
-from app.schemas.user import UserResponse
+from app.models.role import Role
+from app.schemas.user import UserResponse, MemberListResponse
 from app.schemas.gym import GymResponse
 from app.schemas.plan import PlanResponse
 from app.schemas.membership import MembershipResponse
@@ -43,6 +44,35 @@ def get_owner_profile(
     return success_response(data=user_data, message="Owner profile fetched successfully")
 
 
+@router.get("/members", response_model=APIResponse[MemberListResponse], status_code=status.HTTP_200_OK)
+def get_all_members(
+    search: Optional[str] = Query(None, description="Search by name or email"),
+    status: Optional[str] = Query("all", description="Filter by status: all, active, expired, new_joins, payment_pending"),
+    sort_by: Optional[str] = Query("name_asc", description="Sort by: name_asc, name_desc, newest_joiners, plan_expiry_soonest"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Number of items per page"),
+    session: SessionDep = None,
+    current_user: User = require_admin
+):
+    """Get all members for the owner's gym with filtering, sorting, and pagination"""
+    gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            data=None
+        )
+    
+    user_service = UserService(session=session)
+    members_data = user_service.get_all_members(
+        gym_id=gym.id,
+        search=search,
+        status=status,
+        sort_by=sort_by,
+        page=page,
+        page_size=page_size
+    )
+    return success_response(data=members_data, message="Members fetched successfully")
+
 @router.get("/dashboard", response_model=APIResponse[DashboardKPIsResponse], status_code=status.HTTP_200_OK)
 def get_dashboard_kpis(
     session: SessionDep = None,
@@ -55,10 +85,20 @@ def get_dashboard_kpis(
             message="No gym found for this owner",
             data=None
         )
+    # Get role name from database
+    stmt = select(Role).where(Role.id == current_user.role_id)
+    role = session.exec(stmt).first()
+    if not role:
+        return failure_response(
+            message="User role not found",
+            data=None
+        )
+    role_enum = RoleEnum(role.name)
+    
     dashboard_service = DashboardService(session=session)
     kpis_data = dashboard_service.get_user_kpis(
         user_id=current_user.id,
-        role=current_user.role,
+        role=role_enum,
         gym_id=gym.id
     )
     return success_response(data=kpis_data, message="Dashboard KPIs fetched successfully")
