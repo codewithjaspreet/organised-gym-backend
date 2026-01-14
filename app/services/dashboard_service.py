@@ -1,8 +1,10 @@
 from typing import Optional
-from datetime import date, datetime
-from sqlmodel import select, func, and_
+from datetime import date, datetime, timedelta
+from decimal import Decimal
+from sqlmodel import select, func, and_, or_
 from app.db.db import SessionDep
-from app.models.user import Role
+from app.models.user import Role, User
+from app.models.role import Role as RoleModel
 from app.models.membership import Membership
 from app.models.attendance import Attendance
 from app.models.billing import Payment
@@ -47,7 +49,15 @@ class DashboardService:
                     active_members=0,
                     total_check_ins_today=0,
                     total_check_outs_today=0,
-                    total_fee_due_members=0
+                    total_fee_due_members=0,
+                    absent_today_count=0,
+                    present_percentage=0.0,
+                    present_today_trend_percentage=0.0,
+                    total_fees_received_amount=Decimal("0.0"),
+                    total_fees_received_members_count=0,
+                    total_fees_pending_amount=Decimal("0.0"),
+                    paid_percentage=0.0,
+                    unpaid_percentage=0.0
                 )
 
     def _get_admin_kpis(self, gym_id: Optional[str]) -> DashboardKPIsResponse:
@@ -57,23 +67,40 @@ class DashboardService:
                 active_members=0,
                 total_check_ins_today=0,
                 total_check_outs_today=0,
-                total_fee_due_members=0
+                total_fee_due_members=0,
+                absent_today_count=0,
+                present_percentage=0.0,
+                present_today_trend_percentage=0.0,
+                total_fees_received_amount=Decimal("0.0"),
+                total_fees_received_members_count=0,
+                total_fees_pending_amount=Decimal("0.0"),
+                paid_percentage=0.0,
+                unpaid_percentage=0.0
             )
         
         today = date.today()
+        yesterday = today - timedelta(days=1)
         start_of_day = datetime.combine(today, datetime.min.time())
         end_of_day = datetime.combine(today, datetime.max.time())
+        start_of_yesterday = datetime.combine(yesterday, datetime.min.time())
+        end_of_yesterday = datetime.combine(yesterday, datetime.max.time())
         
-        # 1. Active members: Count memberships that are active and not expired
-        active_members_stmt = select(func.count(Membership.id)).where(
-            and_(
-                Membership.gym_id == gym_id,
-                Membership.status == "active",
-                Membership.start_date <= today,
-                Membership.end_date >= today
+        # 1. Active members: Count total members (users with role MEMBER) in the gym
+        # First, get the MEMBER role id
+        member_role_stmt = select(RoleModel).where(RoleModel.name == "MEMBER")
+        member_role = self.session.exec(member_role_stmt).first()
+        
+        if member_role:
+            active_members_stmt = select(func.count(User.id)).where(
+                and_(
+                    User.gym_id == gym_id,
+                    User.role_id == member_role.id,
+                    User.is_active == True
+                )
             )
-        )
-        active_members = self.session.exec(active_members_stmt).first() or 0
+            active_members = self.session.exec(active_members_stmt).first() or 0
+        else:
+            active_members = 0
         
         # 2. Total check-ins today
         check_ins_stmt = select(func.count(Attendance.id)).where(
@@ -85,7 +112,17 @@ class DashboardService:
         )
         total_check_ins_today = self.session.exec(check_ins_stmt).first() or 0
         
-        # 3. Total check-outs today
+        # 3. Total check-ins yesterday (for trend calculation)
+        check_ins_yesterday_stmt = select(func.count(Attendance.id)).where(
+            and_(
+                Attendance.gym_id == gym_id,
+                Attendance.check_in_at >= start_of_yesterday,
+                Attendance.check_in_at <= end_of_yesterday
+            )
+        )
+        total_check_ins_yesterday = self.session.exec(check_ins_yesterday_stmt).first() or 0
+        
+        # 4. Total check-outs today
         check_outs_stmt = select(func.count(Attendance.id)).where(
             and_(
                 Attendance.gym_id == gym_id,
@@ -96,7 +133,7 @@ class DashboardService:
         )
         total_check_outs_today = self.session.exec(check_outs_stmt).first() or 0
         
-        # 4. Total fee due members: Count distinct users with pending payments
+        # 5. Total fee due members: Count distinct users with pending payments
         fee_due_stmt = select(func.count(func.distinct(Payment.user_id))).where(
             and_(
                 Payment.gym_id == gym_id,
@@ -105,11 +142,80 @@ class DashboardService:
         )
         total_fee_due_members = self.session.exec(fee_due_stmt).first() or 0
         
+        # 6. Attendance Overview - Additional metrics
+        absent_today_count = max(0, active_members - total_check_ins_today)
+        present_percentage = (total_check_ins_today / active_members * 100) if active_members > 0 else 0.0
+        
+        # Calculate trend percentage: ((today - yesterday) / yesterday) * 100
+        if total_check_ins_yesterday > 0:
+            present_today_trend_percentage = ((total_check_ins_today - total_check_ins_yesterday) / total_check_ins_yesterday) * 100
+        elif total_check_ins_today > 0:
+            present_today_trend_percentage = 100.0  # 100% increase from 0
+        else:
+            present_today_trend_percentage = 0.0
+        
+        # 7. Fees & Revenue - Additional metrics
+        # Total fees received: Sum of payments with status "paid" or "completed" or "verified"
+        received_payments_stmt = select(func.sum(Payment.amount)).where(
+            and_(
+                Payment.gym_id == gym_id,
+                or_(
+                    Payment.status == "paid",
+                    Payment.status == "completed",
+                    Payment.status == "verified"
+                )
+            )
+        )
+        total_fees_received_amount = self.session.exec(received_payments_stmt).first() or Decimal("0.0")
+        if total_fees_received_amount is None:
+            total_fees_received_amount = Decimal("0.0")
+        
+        # Count distinct members who paid
+        received_members_stmt = select(func.count(func.distinct(Payment.user_id))).where(
+            and_(
+                Payment.gym_id == gym_id,
+                or_(
+                    Payment.status == "paid",
+                    Payment.status == "completed",
+                    Payment.status == "verified"
+                )
+            )
+        )
+        total_fees_received_members_count = self.session.exec(received_members_stmt).first() or 0
+        
+        # Total fees pending: Sum of payments with status "pending"
+        pending_payments_stmt = select(func.sum(Payment.amount)).where(
+            and_(
+                Payment.gym_id == gym_id,
+                Payment.status == "pending"
+            )
+        )
+        total_fees_pending_amount = self.session.exec(pending_payments_stmt).first() or Decimal("0.0")
+        if total_fees_pending_amount is None:
+            total_fees_pending_amount = Decimal("0.0")
+        
+        # Calculate paid/unpaid percentages
+        total_expected_amount = total_fees_received_amount + total_fees_pending_amount
+        if total_expected_amount > 0:
+            paid_percentage = (float(total_fees_received_amount) / float(total_expected_amount)) * 100
+            unpaid_percentage = (float(total_fees_pending_amount) / float(total_expected_amount)) * 100
+        else:
+            paid_percentage = 0.0
+            unpaid_percentage = 0.0
+        
         return DashboardKPIsResponse(
             active_members=active_members,
             total_check_ins_today=total_check_ins_today,
             total_check_outs_today=total_check_outs_today,
-            total_fee_due_members=total_fee_due_members
+            total_fee_due_members=total_fee_due_members,
+            absent_today_count=absent_today_count,
+            present_percentage=round(present_percentage, 2),
+            present_today_trend_percentage=round(present_today_trend_percentage, 2),
+            total_fees_received_amount=total_fees_received_amount,
+            total_fees_received_members_count=total_fees_received_members_count,
+            total_fees_pending_amount=total_fees_pending_amount,
+            paid_percentage=round(paid_percentage, 2),
+            unpaid_percentage=round(unpaid_percentage, 2)
         )
 
     def _get_member_kpis(self, user_id: str, gym_id: Optional[str]) -> DashboardKPIsResponse:
@@ -156,7 +262,15 @@ class DashboardService:
             active_members=active_members,
             total_check_ins_today=total_check_ins_today,
             total_check_outs_today=total_check_outs_today,
-            total_fee_due_members=total_fee_due_members
+            total_fee_due_members=total_fee_due_members,
+            absent_today_count=0,
+            present_percentage=0.0,
+            present_today_trend_percentage=0.0,
+            total_fees_received_amount=Decimal("0.0"),
+            total_fees_received_members_count=0,
+            total_fees_pending_amount=Decimal("0.0"),
+            paid_percentage=0.0,
+            unpaid_percentage=0.0
         )
 
     def _get_staff_kpis(self, gym_id: Optional[str]) -> DashboardKPIsResponse:
@@ -204,6 +318,14 @@ class DashboardService:
             active_members=active_members,
             total_check_ins_today=total_check_ins_today,
             total_check_outs_today=total_check_outs_today,
-            total_fee_due_members=total_fee_due_members
+            total_fee_due_members=total_fee_due_members,
+            absent_today_count=0,
+            present_percentage=0.0,
+            present_today_trend_percentage=0.0,
+            total_fees_received_amount=Decimal("0.0"),
+            total_fees_received_members_count=0,
+            total_fees_pending_amount=Decimal("0.0"),
+            paid_percentage=0.0,
+            unpaid_percentage=0.0
         )
 
