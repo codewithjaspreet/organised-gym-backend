@@ -6,9 +6,10 @@ from app.db.db import SessionDep
 from app.models.user import User, RoleEnum
 from app.models.gym import Gym
 from app.models.role import Role
-from app.schemas.user import UserResponse, MemberListResponse
+from app.schemas.user import UserResponse, MemberListResponse, MemberDetailResponse, AvailableMembersListResponse
 from app.schemas.gym import GymResponse
-from app.schemas.plan import PlanResponse
+from app.schemas.plan import PlanResponse, PlanListResponse
+from app.schemas.gym_rule import GymRuleResponse, GymRuleListResponse
 from app.schemas.membership import MembershipResponse
 from app.schemas.announcement import AnnouncementResponse, AnnouncementListResponse
 from app.schemas.notification import NotificationResponse, NotificationListResponse
@@ -16,6 +17,7 @@ from app.schemas.dashboard import DashboardKPIsResponse
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
 from app.services.user_service import UserService
+from app.core.exceptions import UserNotFoundError
 from app.services.gym_service import GymService
 from app.services.plan_service import PlanService
 from app.services.membership_service import MembershipService
@@ -121,29 +123,40 @@ def get_owner_gym_info(
     return success_response(data=gym_data, message="Gym information fetched successfully")
 
 
-@router.get("/members/{member_id}", response_model=APIResponse[UserResponse], status_code=status.HTTP_200_OK)
-def get_member(
+@router.get("/members/{member_id}", response_model=APIResponse[MemberDetailResponse], status_code=status.HTTP_200_OK)
+def get_member_detail(
     member_id: str,
     session: SessionDep = None,
     current_user: User = require_admin
 ):
-    """Get a member by ID"""
+    """Get detailed member information with current plan"""
     gym = get_owner_gym(current_user, session)
     if not gym:
         return failure_response(
             message="No gym found for this owner",
             data=None
         )
-    user_service = UserService(session=session)
-    member = user_service.get_user(member_id)
     
-    if member.gym_id != gym.id or member.role != "MEMBER":
+    user_service = UserService(session=session)
+    try:
+        member_detail = user_service.get_member_detail(member_id, gym.id)
+        return success_response(data=member_detail, message="Member details fetched successfully")
+    except UserNotFoundError as e:
         return failure_response(
-            message="Member not found in your gym",
+            message=str(e.detail) if hasattr(e, 'detail') else "Member not found",
             data=None
         )
-    
-    return success_response(data=member, message="Member data fetched successfully")
+
+
+@router.get("/available-members", response_model=APIResponse[AvailableMembersListResponse], status_code=status.HTTP_200_OK)
+def get_available_members(
+    session: SessionDep = None,
+    current_user: User = require_admin
+):
+    """Get list of available members (not assigned to any gym)"""
+    user_service = UserService(session=session)
+    members_data = user_service.get_available_members()
+    return success_response(data=members_data, message="Available members fetched successfully")
 
 
 @router.get("/staff/{staff_id}", response_model=APIResponse[UserResponse], status_code=status.HTTP_200_OK)
@@ -219,6 +232,68 @@ def get_plan(
         )
     
     return success_response(data=plan, message="Plan fetched successfully")
+
+
+@router.get("/plans", response_model=APIResponse[PlanListResponse], status_code=status.HTTP_200_OK)
+def get_all_plans(
+    session: SessionDep = None,
+    current_user: User = require_admin
+):
+    """Get all plans for the owner's gym"""
+    gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            data=None
+        )
+    
+    plan_service = PlanService(session=session)
+    plans_data = plan_service.get_all_plans(gym_id=gym.id)
+    return success_response(data=plans_data, message="Plans fetched successfully")
+
+
+@router.get("/rules", response_model=APIResponse[GymRuleListResponse], status_code=status.HTTP_200_OK)
+def get_all_gym_rules(
+    session: SessionDep = None,
+    current_user: User = require_admin
+):
+    """Get all gym rules for the owner's gym"""
+    gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            data=None
+        )
+    
+    gym_service = GymService(session=session)
+    rules_data = gym_service.get_all_gym_rules(gym_id=gym.id)
+    return success_response(data=rules_data, message="Gym rules fetched successfully")
+
+
+@router.get("/rules/{rule_id}", response_model=APIResponse[GymRuleResponse], status_code=status.HTTP_200_OK)
+def get_gym_rule(
+    rule_id: str,
+    session: SessionDep = None,
+    current_user: User = require_admin
+):
+    """Get a gym rule by ID"""
+    gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            data=None
+        )
+    
+    gym_service = GymService(session=session)
+    rule = gym_service.get_gym_rule(rule_id)
+    
+    if rule.gym_id != gym.id:
+        return failure_response(
+            message="Rule not found in your gym",
+            data=None
+        )
+    
+    return success_response(data=rule, message="Gym rule fetched successfully")
 
 
 @router.get("/memberships/{membership_id}", response_model=APIResponse[MembershipResponse], status_code=status.HTTP_200_OK)

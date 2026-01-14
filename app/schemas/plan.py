@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -30,4 +30,8 @@ class PlanResponse(BaseModel):
     description: Optional[str] = None
     is_active: bool
     created_at: datetime
+
+
+class PlanListResponse(BaseModel):
+    plans: List[PlanResponse] = Field(description="The list of plans")
 

@@ -1,8 +1,9 @@
+from typing import List
 from sqlmodel import select
 from app.core.exceptions import NotFoundError
 from app.db.db import SessionDep
 from app.models.plan import Plan
-from app.schemas.plan import PlanCreate, PlanResponse, PlanUpdate
+from app.schemas.plan import PlanCreate, PlanResponse, PlanUpdate, PlanListResponse
 
 
 class PlanService:
@@ -23,7 +24,7 @@ class PlanService:
         self.session.commit()
         self.session.refresh(db_plan)
 
-        return PlanResponse.model_validate(db_plan)
+        return PlanResponse.model_validate(db_plan.model_dump())
 
     def get_plan(self, plan_id: str) -> PlanResponse:
         stmt = select(Plan).where(Plan.id == plan_id)
@@ -31,7 +32,7 @@ class PlanService:
         if not plan:
             raise NotFoundError(detail=f"Plan with id {plan_id} not found")
 
-        return PlanResponse.model_validate(plan)
+        return PlanResponse.model_validate(plan.model_dump())
 
     def update_plan(self, plan_id: str, plan_update: PlanUpdate) -> PlanResponse:
         stmt = select(Plan).where(Plan.id == plan_id)
@@ -47,7 +48,7 @@ class PlanService:
         self.session.commit()
         self.session.refresh(plan)
 
-        return PlanResponse.model_validate(plan)
+        return PlanResponse.model_validate(plan.model_dump())
 
     def delete_plan(self, plan_id: str) -> None:
         stmt = select(Plan).where(Plan.id == plan_id)
@@ -58,4 +59,17 @@ class PlanService:
         self.session.delete(plan)
         self.session.commit()
         return None
+
+    def get_all_plans(self, gym_id: str) -> PlanListResponse:
+        """Get all plans for a gym"""
+        stmt = select(Plan).where(Plan.gym_id == gym_id)
+        stmt = stmt.order_by(Plan.created_at.desc())
+        
+        plans = self.session.exec(stmt).all()
+        plan_responses = [
+            PlanResponse.model_validate(plan.model_dump())
+            for plan in plans
+        ]
+        
+        return PlanListResponse(plans=plan_responses)
 

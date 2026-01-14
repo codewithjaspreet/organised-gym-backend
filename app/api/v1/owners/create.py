@@ -10,6 +10,7 @@ from app.schemas.plan import PlanCreate, PlanResponse
 from app.schemas.membership import MembershipCreate, MembershipResponse
 from app.schemas.announcement import AnnouncementCreate, AnnouncementResponse
 from app.schemas.notification import NotificationCreate, NotificationResponse
+from app.schemas.gym_rule import GymRuleCreate, GymRuleResponse
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
 from app.services.user_service import UserService
@@ -217,4 +218,29 @@ def create_notification(
     notification_service = NotificationService(session=session)
     notification_data = notification_service.create_notification(notification=notification)
     return success_response(data=notification_data, message="Notification created successfully")
+
+
+@router.post("/rules", response_model=APIResponse[GymRuleResponse], status_code=status.HTTP_201_CREATED)
+def create_gym_rule(
+    rule: GymRuleCreate,
+    session: SessionDep = None,
+    current_user: User = require_admin
+):
+    """Create a new gym rule for the owner's gym"""
+    gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    
+    if rule.gym_id != gym.id:
+        return failure_response(
+            message="You can only create rules for your own gym",
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    gym_service = GymService(session=session)
+    rule_data = gym_service.create_gym_rule(rule)
+    return success_response(data=rule_data, message="Gym rule created successfully")
 

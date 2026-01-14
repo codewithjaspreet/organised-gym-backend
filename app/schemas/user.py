@@ -72,11 +72,70 @@ class UserResponse(BaseModel):
     created_at: datetime
 
 
+class MemberListItemResponse(BaseModel):
+    """Response for member list items with plan info"""
+    id: str
+    name: str
+    email: str
+    photo_url: Optional[str] = None
+    plan_name: Optional[str] = None
+    plan_status: Optional[str] = None
+    plan_expiry_date: Optional[date] = None
+    days_left: Optional[int] = None
+
+
+class CurrentPlanResponse(BaseModel):
+    """Current plan information for member"""
+    plan_id: str
+    plan_name: str
+    expiry_date: str
+    monthly_price: float
+    status: str
+    days_left: int
+
+
+class MemberDetailResponse(BaseModel):
+    """Detailed member response for detail page"""
+    id: str
+    name: str
+    email: str
+    phone: str
+    gender: Gender
+    dob: date
+    photo_url: Optional[str] = None
+    role: str
+    
+    # Current Plan Information
+    current_plan: Optional[CurrentPlanResponse] = None
+    
+    # Personal Details
+    address_line1: str
+    address_line2: Optional[str] = None
+    city: str
+    state: str
+    postal_code: str
+    country: str
+    
+    created_at: datetime
+
+
 class MemberListResponse(BaseModel):
-    members: List[UserResponse] = Field(description="The list of members")
+    members: List[MemberListItemResponse] = Field(description="The list of members")
     total: int = Field(description="Total number of members")
     page: int = Field(description="Current page number")
     page_size: int = Field(description="Number of items per page")
     has_next: bool = Field(description="Whether there are more pages")
+
+
+class AvailableMemberResponse(BaseModel):
+    """Simple response for available members (not assigned to any gym)"""
+    id: str
+    name: str
+    email: str
+    phone: str
+
+
+class AvailableMembersListResponse(BaseModel):
+    members: List[AvailableMemberResponse] = Field(description="List of available members")
 
 

@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from app.models.plan import Plan
     from app.models.user import User
     from app.models.announcement import Announcement
+    from app.models.gym_rule import GymRule
 
 
 class Gym(SQLModel, table=True):
@@ -73,4 +74,5 @@ class Gym(SQLModel, table=True):
     memberships: List["Membership"] = Relationship(back_populates="gym")
     plans: List["Plan"] = Relationship(back_populates="gym")
     gym_subscriptions: List["GymSubscription"] = Relationship(back_populates="gym")
+    rules: List["GymRule"] = Relationship(back_populates="gym")
 
