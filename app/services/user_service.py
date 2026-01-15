@@ -543,3 +543,36 @@ class UserService:
         
         return AvailableMembersListResponse(members=members)
 
+    def add_member_to_gym(self, member_user_name: str, gym_id: str) -> UserResponse:
+        """Add an existing member to a gym by username"""
+        from app.models.role import Role as RoleModel
+        
+        # Find user by username
+        stmt = select(User).where(User.user_name == member_user_name)
+        user = self.session.exec(stmt).first()
+        
+        if not user:
+            raise UserNotFoundError(detail=f"User with username '{member_user_name}' not found")
+        
+        # Verify user is a MEMBER
+        member_role_stmt = select(RoleModel).where(RoleModel.name == "MEMBER")
+        member_role = self.session.exec(member_role_stmt).first()
+        
+        if not member_role or user.role_id != member_role.id:
+            raise NotFoundError(detail=f"User '{member_user_name}' is not a member")
+        
+        # Check if user is already assigned to a gym
+        if user.gym_id is not None:
+            if user.gym_id == gym_id:
+                # Already in this gym
+                return UserResponse(**user.model_dump(exclude={"password_hash"}))
+            else:
+                raise NotFoundError(detail=f"User '{member_user_name}' is already assigned to another gym")
+        
+        # Assign user to gym
+        user.gym_id = gym_id
+        self.session.commit()
+        self.session.refresh(user)
+        
+        return UserResponse(**user.model_dump(exclude={"password_hash"}))
+
