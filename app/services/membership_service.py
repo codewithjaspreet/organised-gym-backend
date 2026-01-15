@@ -17,13 +17,15 @@ class MembershipService:
             start_date=membership.start_date,
             end_date=membership.end_date,
             status=membership.status,
-            plan_id=membership.plan_id
+            plan_id=membership.plan_id,
+            bonus_duration=membership.bonus_duration,
+            discounted_plan_price=membership.discounted_plan_price
         )
         self.session.add(db_membership)
         self.session.commit()
         self.session.refresh(db_membership)
 
-        return MembershipResponse.model_validate(db_membership)
+        return MembershipResponse.model_validate(db_membership.model_dump())
 
     def get_membership(self, membership_id: str) -> MembershipResponse:
         stmt = select(Membership).where(Membership.id == membership_id)

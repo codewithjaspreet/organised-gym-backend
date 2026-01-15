@@ -65,6 +65,7 @@ class UserResponse(BaseModel):
     gym_id: Optional[str] = None
     plan_id: Optional[str] = None
     role_id: str
+    role_name: Optional[str] = None
     city: str
     state: str
     postal_code: str

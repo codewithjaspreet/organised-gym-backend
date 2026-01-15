@@ -1,5 +1,6 @@
 from typing import List, Optional
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from sqlmodel import select, func, and_, or_
 from app.core.exceptions import NotFoundError, UserNameAlreadyExistsError, UserNotFoundError
 from app.db.db import SessionDep
@@ -21,12 +22,22 @@ class UserService:
         self.session = session
 
     def get_user(self, user_id: str) -> UserResponse:
+        from app.models.role import Role as RoleModel
+        
         stmt = select(User).where(User.id == user_id)
         user = self.session.exec(stmt).first()
         if not user:
             raise UserNotFoundError(detail=f"User with id {user_id} not found")
         
+        # Get role name
+        role_name = None
+        if user.role_id:
+            role_stmt = select(RoleModel).where(RoleModel.id == user.role_id)
+            role = self.session.exec(role_stmt).first()
+            role_name = role.name if role else None
+        
         user_dict = user.model_dump(exclude={"password_hash"})
+        user_dict["role_name"] = role_name
         return UserResponse(**user_dict)
 
     def get_member_detail(self, member_id: str, gym_id: str) -> MemberDetailResponse:
@@ -112,6 +123,7 @@ class UserService:
         search: Optional[str] = None,
         status: Optional[str] = None,
         sort_by: Optional[str] = None,
+        pending_fees: Optional[bool] = None,
         page: int = 1,
         page_size: int = 20
     ) -> MemberListResponse:
@@ -147,6 +159,30 @@ class UserService:
                     func.lower(User.email).like(search_term)
                 )
             )
+        
+        # Apply pending_fees filter (if provided, overrides status filter for fees)
+        if pending_fees is not None:
+            from app.models.billing import Payment
+            # Get users with pending or overdue payments
+            today = date.today()
+            user_ids_subquery = select(func.distinct(Payment.user_id)).where(
+                and_(
+                    Payment.gym_id == gym_id,
+                    Payment.status == "pending"
+                )
+            )
+            user_ids = [uid for uid in self.session.exec(user_ids_subquery).all()]
+            if user_ids:
+                stmt = stmt.where(User.id.in_(user_ids))
+            else:
+                # No matching users, return empty
+                return MemberListResponse(
+                    members=[],
+                    total=0,
+                    page=page,
+                    page_size=page_size,
+                    has_next=False
+                )
         
         # Apply status filter
         if status and status != "all":
@@ -543,9 +579,19 @@ class UserService:
         
         return AvailableMembersListResponse(members=members)
 
-    def add_member_to_gym(self, member_user_name: str, gym_id: str) -> UserResponse:
-        """Add an existing member to a gym by username"""
+    def add_member_to_gym(
+        self, 
+        member_user_name: str, 
+        gym_id: str,
+        plan_id: Optional[str] = None,
+        bonus_duration: Optional[int] = None,
+        discounted_plan_price: Optional[Decimal] = None
+    ) -> UserResponse:
+        """Add an existing member to a gym by username and create membership if plan_id is provided"""
         from app.models.role import Role as RoleModel
+        from app.models.plan import Plan
+        from app.models.membership import Membership
+        from datetime import date, timedelta
         
         # Find user by username
         stmt = select(User).where(User.user_name == member_user_name)
@@ -573,6 +619,39 @@ class UserService:
         user.gym_id = gym_id
         self.session.commit()
         self.session.refresh(user)
+        
+        # Create membership if plan_id is provided
+        if plan_id:
+            # Verify plan exists and belongs to the gym
+            plan_stmt = select(Plan).where(
+                and_(
+                    Plan.id == plan_id,
+                    Plan.gym_id == gym_id
+                )
+            )
+            plan = self.session.exec(plan_stmt).first()
+            
+            if not plan:
+                raise NotFoundError(detail=f"Plan with id '{plan_id}' not found for this gym")
+            
+            # Calculate start and end dates
+            today = date.today()
+            total_duration = plan.duration_days + (bonus_duration or 0)
+            end_date = today + timedelta(days=total_duration)
+            
+            # Create membership
+            membership = Membership(
+                user_id=user.id,
+                gym_id=gym_id,
+                start_date=today,
+                end_date=end_date,
+                status="active",
+                plan_id=plan_id,
+                bonus_duration=bonus_duration,
+                discounted_plan_price=discounted_plan_price
+            )
+            self.session.add(membership)
+            self.session.commit()
         
         return UserResponse(**user.model_dump(exclude={"password_hash"}))
 
