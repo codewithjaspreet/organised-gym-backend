@@ -495,12 +495,9 @@ class UserService:
 
     def get_available_members(
         self,
-        member_name: Optional[str] = None,
-        email: Optional[str] = None,
-        phone: Optional[str] = None,
-        user_name: Optional[str] = None
+        query: Optional[str] = None
     ) -> AvailableMembersListResponse:
-        """Get all members that are not assigned to any gym (gym_id is null) with optional filters"""
+        """Get all members that are not assigned to any gym (gym_id is null) with optional search query"""
         from app.models.role import Role as RoleModel
         
         # Get MEMBER role id
@@ -518,22 +515,17 @@ class UserService:
             )
         )
         
-        # Apply optional filters
-        if member_name:
-            search_term = f"%{member_name.lower()}%"
-            stmt = stmt.where(func.lower(User.name).like(search_term))
-        
-        if email:
-            search_term = f"%{email.lower()}%"
-            stmt = stmt.where(func.lower(User.email).like(search_term))
-        
-        if phone:
-            search_term = f"%{phone}%"
-            stmt = stmt.where(User.phone.like(search_term))
-        
-        if user_name:
-            search_term = f"%{user_name.lower()}%"
-            stmt = stmt.where(func.lower(User.user_name).like(search_term))
+        # Apply search query across all fields if provided
+        if query:
+            search_term = f"%{query.lower()}%"
+            stmt = stmt.where(
+                or_(
+                    func.lower(User.name).like(search_term),
+                    func.lower(User.email).like(search_term),
+                    func.lower(User.user_name).like(search_term),
+                    User.phone.like(f"%{query}%")
+                )
+            )
         
         stmt = stmt.order_by(User.name.asc())
         
