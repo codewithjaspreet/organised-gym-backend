@@ -54,7 +54,10 @@ def add_member(
     user_service = UserService(session=session)
     member_data = user_service.add_member_to_gym(
         member_user_name=request.member_user_name,
-        gym_id=request.gym_id
+        gym_id=request.gym_id,
+        plan_id=request.plan_id,
+        bonus_duration=request.bonus_duration,
+        discounted_plan_price=request.discounted_plan_price
     )
     return success_response(data=member_data, message="Member added to gym successfully")
 

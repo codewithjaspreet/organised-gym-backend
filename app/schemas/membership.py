@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from typing import Optional
+from decimal import Decimal
 from pydantic import BaseModel, Field
 
 
@@ -10,6 +11,8 @@ class MembershipCreate(BaseModel):
     end_date: date = Field(description="The membership end date")
     status: str = Field(description="The membership status")
     plan_id: str = Field(description="The plan id")
+    bonus_duration: Optional[int] = Field(default=None, description="Bonus duration in days")
+    discounted_plan_price: Optional[Decimal] = Field(default=None, description="Discounted plan price")
 
 
 class MembershipUpdate(BaseModel):
@@ -27,5 +30,7 @@ class MembershipResponse(BaseModel):
     end_date: date
     status: str
     plan_id: str
+    bonus_duration: Optional[int] = None
+    discounted_plan_price: Optional[Decimal] = None
     created_at: datetime
 

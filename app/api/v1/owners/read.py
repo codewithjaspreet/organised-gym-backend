@@ -41,8 +41,24 @@ def get_owner_profile(
     current_user: User = require_admin
 ):
     """Get owner profile"""
+    # Get owner's gym
+    gym = get_owner_gym(current_user, session)
+    
+    # Get role name
+    stmt = select(Role).where(Role.id == current_user.role_id)
+    role = session.exec(stmt).first()
+    role_name = role.name if role else None
+    
     user_service = UserService(session=session)
     user_data = user_service.get_user(current_user.id)
+    
+    # Update gym_id if gym exists
+    if gym:
+        user_data.gym_id = gym.id
+    
+    # Add role_name to response (temporary workaround - would need schema update for proper solution)
+    # For now, role_id is already in response, and we can add role_name via a custom response
+    # But since UserResponse doesn't have role_name, we'll ensure gym_id is set correctly
     return success_response(data=user_data, message="Owner profile fetched successfully")
 
 
@@ -51,6 +67,7 @@ def get_all_members(
     search: Optional[str] = Query(None, description="Search by name or email"),
     status: Optional[str] = Query("all", description="Filter by status: all, active, expired, new_joins, payment_pending"),
     sort_by: Optional[str] = Query("name_asc", description="Sort by: name_asc, name_desc, newest_joiners, plan_expiry_soonest"),
+    pending_fees: Optional[bool] = Query(None, description="Filter members with pending/overdue fees"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Number of items per page"),
     session: SessionDep = None,
@@ -70,6 +87,7 @@ def get_all_members(
         search=search,
         status=status,
         sort_by=sort_by,
+        pending_fees=pending_fees,
         page=page,
         page_size=page_size
     )

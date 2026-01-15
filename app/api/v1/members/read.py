@@ -1,7 +1,9 @@
 from fastapi import APIRouter, status
+from sqlmodel import select
 from app.core.permissions import require_any_authenticated
 from app.db.db import SessionDep
-from app.models.user import User, Role
+from app.models.user import User, Role, RoleEnum
+from app.models.role import Role as RoleModel
 from app.schemas.user import UserResponse
 from app.schemas.membership import MembershipResponse
 from app.schemas.billing import PaymentResponse
@@ -39,16 +41,28 @@ def get_dashboard_kpis(
     current_user: User = require_any_authenticated
 ):
     """Get member dashboard KPIs"""
-    if current_user.role != Role.MEMBER:
+    # Get role name from database
+    stmt = select(RoleModel).where(RoleModel.id == current_user.role_id)
+    role = session.exec(stmt).first()
+    if not role:
+        return failure_response(
+            message="User role not found",
+            data=None
+        )
+    
+    # Verify user is a MEMBER
+    if role.name != "MEMBER":
         return failure_response(
             message="Only members can access this endpoint",
             data=None
         )
     
+    role_enum = RoleEnum(role.name)
+    
     dashboard_service = DashboardService(session=session)
     kpis_data = dashboard_service.get_user_kpis(
         user_id=current_user.id,
-        role=current_user.role,
+        role=role_enum,
         gym_id=current_user.gym_id
     )
     return success_response(data=kpis_data, message="Member dashboard KPIs fetched successfully")
