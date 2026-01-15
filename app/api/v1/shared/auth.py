@@ -19,7 +19,7 @@ from app.core.exceptions import (
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-@router.post("/register", response_model=APIResponse[UserResponse], status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=APIResponse[LoginResponse], status_code=status.HTTP_201_CREATED)
 def register(user: UserCreate, session: SessionDep):
     try:
         auth_service = AuthService(session=session)
@@ -27,7 +27,7 @@ def register(user: UserCreate, session: SessionDep):
         return success_response(data=user_data, message="User registered successfully")
     except (UserNameAlreadyExistsError, EmailAlreadyExistsError, PhoneAlreadyExistsError, UserAlreadyExistsError) as e:
         return failure_response(
-            message=str(e.detail) if hasattr(e, 'detail') else "User already exists",
+            message=str(e.detail) if hasattr(e, 'detail') else "User is already registered",
             status_code=status.HTTP_400_BAD_REQUEST
         )
     except (InvalidEmailError, InvalidPhoneError, InvalidUserNameError, InvalidPasswordError) as e:
