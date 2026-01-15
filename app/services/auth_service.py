@@ -14,17 +14,29 @@ class AuthService:
 
     
     def register(self, user: UserCreate) -> LoginResponse:
-            # 1. Get role_id from role name
+            # 1. Check if user already exists by email
+            stmt = select(User).where(User.email == user.email)
+            existing_user = self.session.exec(stmt).first()
+            if existing_user:
+                raise EmailAlreadyExistsError(detail="User with this email is already registered")
+            
+            # 2. Check if user already exists by phone
+            stmt = select(User).where(User.phone == user.phone)
+            existing_user = self.session.exec(stmt).first()
+            if existing_user:
+                raise PhoneAlreadyExistsError(detail="User with this phone number is already registered")
+            
+            # 3. Get role_id from role name
             stmt = select(Role).where(Role.name == user.role.upper())
             role = self.session.exec(stmt).first()
             if not role:
                 raise NotFoundError(detail=f"Role '{user.role}' not found")
             
-            # 2. Generate username if not provided
+            # 4. Generate username if not provided
             if not user.user_name:
                 user.user_name = self._generate_username(user.email, user.name)
             
-            # 3. Check if username exists and generate a unique one
+            # 5. Check if username exists and generate a unique one
             stmt = select(User).where(User.user_name == user.user_name)
             existing = self.session.exec(stmt).first()
             if existing:
@@ -76,12 +88,13 @@ class AuthService:
             access_token = create_access_token(data=token_data)
             refresh_token = create_refresh_token(data=token_data)
             
-            # 10. Return LoginResponse with tokens
+            # 10. Return LoginResponse with tokens and username
             return LoginResponse(
                 access_token=access_token,
                 refresh_token=refresh_token,
                 token_type="bearer",
-                role=role_name
+                role=role_name,
+                user_name=db_user.user_name
             )
     
     def _generate_username(self, email: str, name: str) -> str:

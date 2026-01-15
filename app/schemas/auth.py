@@ -31,3 +31,4 @@ class LoginResponse(BaseModel):
     refresh_token: str = Field(..., description="The refresh token")
     token_type: str = Field(..., description="The token type")
     role: str = Field(..., description="The user's role")
+    user_name: Optional[str] = Field(None, description="The user's username")
