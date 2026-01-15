@@ -150,12 +150,21 @@ def get_member_detail(
 
 @router.get("/available-members", response_model=APIResponse[AvailableMembersListResponse], status_code=status.HTTP_200_OK)
 def get_available_members(
+    member_name: Optional[str] = Query(None, description="Filter by member name"),
+    email: Optional[str] = Query(None, description="Filter by email"),
+    phone: Optional[str] = Query(None, description="Filter by phone"),
+    user_name: Optional[str] = Query(None, description="Filter by username"),
     session: SessionDep = None,
     current_user: User = require_admin
 ):
-    """Get list of available members (not assigned to any gym)"""
+    """Get list of available members (not assigned to any gym) with optional filters"""
     user_service = UserService(session=session)
-    members_data = user_service.get_available_members()
+    members_data = user_service.get_available_members(
+        member_name=member_name,
+        email=email,
+        phone=phone,
+        user_name=user_name
+    )
     return success_response(data=members_data, message="Available members fetched successfully")
 
 
