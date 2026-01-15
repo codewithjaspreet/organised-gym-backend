@@ -5,6 +5,7 @@ from app.db.db import SessionDep
 from app.models.user import User
 from app.models.gym import Gym
 from app.schemas.user import UserCreate, UserResponse
+from app.schemas.member import AddMemberRequest
 from app.schemas.gym import GymCreate, GymResponse
 from app.schemas.plan import PlanCreate, PlanResponse
 from app.schemas.membership import MembershipCreate, MembershipResponse
@@ -30,18 +31,12 @@ def get_owner_gym(current_user: User, session: SessionDep):
 
 
 @router.post("/members", response_model=APIResponse[UserResponse], status_code=status.HTTP_201_CREATED)
-def create_member(
-    user: UserCreate,
+def add_member(
+    request: AddMemberRequest,
     session: SessionDep = None,
     current_user: User = require_admin
 ):
-    """Create a new member for the owner's gym. Owner must pass gym_id explicitly"""
-    if not user.gym_id:
-        return failure_response(
-            message="gym_id is required when creating a member",
-            status_code=status.HTTP_400_BAD_REQUEST
-        )
-    
+    """Add an existing member to the owner's gym by username"""
     # Validate that the gym exists and belongs to this owner
     gym = get_owner_gym(current_user, session)
     if not gym:
@@ -50,18 +45,18 @@ def create_member(
             status_code=status.HTTP_404_NOT_FOUND
         )
     
-    if user.gym_id != gym.id:
+    if request.gym_id != gym.id:
         return failure_response(
-            message="You can only create members for your own gym",
+            message="You can only add members to your own gym",
             status_code=status.HTTP_403_FORBIDDEN
         )
     
-    user_dict = user.model_dump()
-    user_dict["role"] = "MEMBER"
-    
     user_service = UserService(session=session)
-    member_data = user_service.create_user(UserCreate(**user_dict))
-    return success_response(data=member_data, message="Member created successfully")
+    member_data = user_service.add_member_to_gym(
+        member_user_name=request.member_user_name,
+        gym_id=request.gym_id
+    )
+    return success_response(data=member_data, message="Member added to gym successfully")
 
 
 @router.post("/staff", response_model=APIResponse[UserResponse], status_code=status.HTTP_201_CREATED)
