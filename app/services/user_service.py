@@ -493,8 +493,14 @@ class UserService:
         random_part = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
         return f"user{random_part}"
 
-    def get_available_members(self) -> AvailableMembersListResponse:
-        """Get all members that are not assigned to any gym (gym_id is null)"""
+    def get_available_members(
+        self,
+        member_name: Optional[str] = None,
+        email: Optional[str] = None,
+        phone: Optional[str] = None,
+        user_name: Optional[str] = None
+    ) -> AvailableMembersListResponse:
+        """Get all members that are not assigned to any gym (gym_id is null) with optional filters"""
         from app.models.role import Role as RoleModel
         
         # Get MEMBER role id
@@ -504,13 +510,32 @@ class UserService:
         if not member_role:
             return AvailableMembersListResponse(members=[])
         
-        # Get members with gym_id = null
+        # Base query: members with gym_id = null and role = MEMBER
         stmt = select(User).where(
             and_(
                 User.role_id == member_role.id,
                 User.gym_id.is_(None)
             )
-        ).order_by(User.name.asc())
+        )
+        
+        # Apply optional filters
+        if member_name:
+            search_term = f"%{member_name.lower()}%"
+            stmt = stmt.where(func.lower(User.name).like(search_term))
+        
+        if email:
+            search_term = f"%{email.lower()}%"
+            stmt = stmt.where(func.lower(User.email).like(search_term))
+        
+        if phone:
+            search_term = f"%{phone}%"
+            stmt = stmt.where(User.phone.like(search_term))
+        
+        if user_name:
+            search_term = f"%{user_name.lower()}%"
+            stmt = stmt.where(func.lower(User.user_name).like(search_term))
+        
+        stmt = stmt.order_by(User.name.asc())
         
         users = self.session.exec(stmt).all()
         
