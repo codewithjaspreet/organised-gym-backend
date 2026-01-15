@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from sqlmodel import select, func, and_, or_
@@ -8,7 +8,7 @@ from app.models.role import Role as RoleModel
 from app.models.membership import Membership
 from app.models.attendance import Attendance
 from app.models.billing import Payment
-from app.schemas.dashboard import DashboardKPIsResponse
+from app.schemas.dashboard import DashboardKPIsResponse, DailyAttendanceResponse
 
 
 class DashboardService:
@@ -221,48 +221,37 @@ class DashboardService:
     def _get_member_kpis(self, user_id: str, gym_id: Optional[str]) -> DashboardKPIsResponse:
         """Get KPIs for MEMBER role - personal statistics only"""
         today = date.today()
-        start_of_day = datetime.combine(today, datetime.min.time())
-        end_of_day = datetime.combine(today, datetime.max.time())
         
-        # 1. Active members: Return 0 (members don't see gym-wide stats)
-        active_members = 0
+        # Get membership expiry date and days remaining
+        membership_expiry_date = None
+        membership_days_remaining = None
         
-        # 2. Total check-ins today: Count user's own check-ins
-        check_ins_stmt = select(func.count(Attendance.id)).where(
-            and_(
-                Attendance.user_id == user_id,
-                Attendance.check_in_at >= start_of_day,
-                Attendance.check_in_at <= end_of_day
-            )
-        )
-        total_check_ins_today = self.session.exec(check_ins_stmt).first() or 0
+        if gym_id:
+            # Get active membership (status = 'active' and end_date >= today)
+            membership_stmt = select(Membership).where(
+                and_(
+                    Membership.user_id == user_id,
+                    Membership.gym_id == gym_id,
+                    Membership.status == "active",
+                    Membership.end_date >= today
+                )
+            ).order_by(Membership.end_date.asc())
+            active_membership = self.session.exec(membership_stmt).first()
+            
+            if active_membership:
+                expiry_date = active_membership.end_date
+                membership_expiry_date = expiry_date.strftime("%d-%m-%Y")
+                days_remaining = (expiry_date - today).days
+                membership_days_remaining = max(0, days_remaining)
         
-        # 3. Total check-outs today: Count user's own check-outs
-        check_outs_stmt = select(func.count(Attendance.id)).where(
-            and_(
-                Attendance.user_id == user_id,
-                Attendance.check_out_at.isnot(None),
-                Attendance.check_out_at >= start_of_day,
-                Attendance.check_out_at <= end_of_day
-            )
-        )
-        total_check_outs_today = self.session.exec(check_outs_stmt).first() or 0
-        
-        # 4. Total fee due members: Check if user has any pending payments
-        fee_due_stmt = select(Payment).where(
-            and_(
-                Payment.user_id == user_id,
-                Payment.status == "pending"
-            )
-        )
-        has_pending_fees = self.session.exec(fee_due_stmt).first() is not None
-        total_fee_due_members = 1 if has_pending_fees else 0
+        # 6. Get last 7 days attendance streak
+        last_7_days_attendance = self._get_last_7_days_attendance(user_id)
         
         return DashboardKPIsResponse(
-            active_members=active_members,
-            total_check_ins_today=total_check_ins_today,
-            total_check_outs_today=total_check_outs_today,
-            total_fee_due_members=total_fee_due_members,
+            active_members=None,
+            total_check_ins_today=None,
+            total_check_outs_today=None,
+            total_fee_due_members=None,
             absent_today_count=0,
             present_percentage=0.0,
             present_today_trend_percentage=0.0,
@@ -270,8 +259,41 @@ class DashboardService:
             total_fees_received_members_count=0,
             total_fees_pending_amount=Decimal("0.0"),
             paid_percentage=0.0,
-            unpaid_percentage=0.0
+            unpaid_percentage=0.0,
+            membership_expiry_date=membership_expiry_date,
+            membership_days_remaining=membership_days_remaining,
+            last_7_days_attendance=last_7_days_attendance
         )
+    
+    def _get_last_7_days_attendance(self, user_id: str) -> List[DailyAttendanceResponse]:
+        """Get last 7 days attendance streak with dates in Indian format"""
+        today = date.today()
+        attendance_list = []
+        
+        # Generate last 7 days (including today)
+        for i in range(6, -1, -1):  # 6 days ago to today
+            check_date = today - timedelta(days=i)
+            date_str = check_date.strftime("%d-%m-%Y")
+            
+            # Check if user has attendance on this date
+            start_of_day = datetime.combine(check_date, datetime.min.time())
+            end_of_day = datetime.combine(check_date, datetime.max.time())
+            
+            attendance_stmt = select(Attendance).where(
+                and_(
+                    Attendance.user_id == user_id,
+                    Attendance.check_in_at >= start_of_day,
+                    Attendance.check_in_at <= end_of_day
+                )
+            )
+            attendance_record = self.session.exec(attendance_stmt).first()
+            
+            status = "present" if attendance_record else "absent"
+            attendance_list.append(
+                DailyAttendanceResponse(date=date_str, status=status)
+            )
+        
+        return attendance_list
 
     def _get_staff_kpis(self, gym_id: Optional[str]) -> DashboardKPIsResponse:
         """Get KPIs for STAFF/TRAINER role - limited gym statistics"""

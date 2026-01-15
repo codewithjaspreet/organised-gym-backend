@@ -1,6 +1,7 @@
 from sqlmodel import Field, SQLModel, Relationship
 from typing import Optional, List
 from datetime import datetime, date
+from decimal import Decimal
 from uuid import uuid4
 
 from app.models.gym import Gym
@@ -31,6 +32,8 @@ class Membership(SQLModel, table=True):
         description="The plan id",
         foreign_key="plans.id"
     )
+    bonus_duration: Optional[int] = Field(default=None, description="Bonus duration in days", nullable=True)
+    discounted_plan_price: Optional[Decimal] = Field(default=None, description="Discounted plan price", nullable=True)
     created_at: datetime = Field(
         description="The membership creation date",
         default_factory=datetime.now
