@@ -417,6 +417,8 @@ class UserService:
         )
  
     def update_user(self, user_id: str, user_update: UserUpdate) -> UserResponse:
+        from app.models.role import Role as RoleModel
+        
         stmt = select(User).where(User.id == user_id)
         user = self.session.exec(stmt).first()
         if not user:
@@ -440,7 +442,15 @@ class UserService:
         self.session.commit()
         self.session.refresh(user)
 
+        # Get role name for response
+        role_name = None
+        if user.role_id:
+            role_stmt = select(RoleModel).where(RoleModel.id == user.role_id)
+            role = self.session.exec(role_stmt).first()
+            role_name = role.name if role else None
+
         user_dict = user.model_dump(exclude={"password_hash"})
+        user_dict["role_name"] = role_name
         return UserResponse(**user_dict)
 
     def delete_user(self, user_id: str) -> None:
