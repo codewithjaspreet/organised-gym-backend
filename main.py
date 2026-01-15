@@ -8,6 +8,7 @@ from app.api.v1.platform_admin import router as platform_admin_router
 from app.api.v1.staff import router as staff_router
 from app.api.v1.trainers import router as trainers_router
 from app.api.v1.shared import router as shared_router
+from app.api.v1.users import router as users_router
 from app.core import config
 from contextlib import asynccontextmanager
 from app.db.db import create_db_and_tables
@@ -36,6 +37,7 @@ app.include_router(trainers_router, prefix="/api/v1")
 
 # Include shared/common routers
 app.include_router(shared_router, prefix="/api/v1")
+app.include_router(users_router, prefix="/api/v1")
 
 @app.get("/")
 def root():
