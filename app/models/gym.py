@@ -53,6 +53,12 @@ class Gym(SQLModel, table=True):
         description="Whether the gym is active",
         default=True
     )
+    gym_code: Optional[str] = Field(
+        description="The gym's unique 6-letter code",
+        nullable=True,
+        unique=True,
+        index=True
+    )
     created_at: datetime = Field(
         description="The gym's creation date",
         default_factory=datetime.now

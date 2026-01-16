@@ -20,17 +20,19 @@ class GymCreate(BaseModel):
 
 
 class GymUpdate(BaseModel):
-    name: Optional[str] = Field(description="The gym's name", nullable=True)
-    logo: Optional[str] = Field(description="The gym's logo URL", nullable=True)
-    address_line1: Optional[str] = Field(description="The gym's address line 1", nullable=True)
-    address_line2: Optional[str] = Field(description="The gym's address line 2", nullable=True)
-    city: Optional[str] = Field(description="The gym's city", nullable=True)
-    state: Optional[str] = Field(description="The gym's state", nullable=True)
-    postal_code: Optional[str] = Field(description="The gym's postal code", nullable=True)
-    country: Optional[str] = Field(description="The gym's country", nullable=True)
-    dob: Optional[str] = Field(description="The gym's date of birth", nullable=True)
-    opening_hours: Optional[str] = Field(description="The gym's opening hours", nullable=True)
-    is_active: Optional[bool] = Field(description="Whether the gym is active", nullable=True)
+    gym_id: Optional[str] = Field(default=None, description="The gym id (required for platform admin, optional for gym owner)")
+    name: Optional[str] = Field(default=None, description="The gym's name")
+    logo: Optional[str] = Field(default=None, description="The gym's logo URL")
+    address_line1: Optional[str] = Field(default=None, description="The gym's address line 1")
+    address_line2: Optional[str] = Field(default=None, description="The gym's address line 2")
+    city: Optional[str] = Field(default=None, description="The gym's city")
+    state: Optional[str] = Field(default=None, description="The gym's state")
+    postal_code: Optional[str] = Field(default=None, description="The gym's postal code")
+    country: Optional[str] = Field(default=None, description="The gym's country")
+    dob: Optional[str] = Field(default=None, description="The gym's date of birth")
+    opening_hours: Optional[str] = Field(default=None, description="The gym's opening hours")
+    is_active: Optional[bool] = Field(default=None, description="Whether the gym is active")
+    gym_code: Optional[str] = Field(default=None, description="The gym's code")
 
 
 class GymResponse(BaseModel):
@@ -47,6 +49,7 @@ class GymResponse(BaseModel):
     dob: Optional[str] = None
     opening_hours: Optional[str] = None
     is_active: bool
+    gym_code: Optional[str] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
