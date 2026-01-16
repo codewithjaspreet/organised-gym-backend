@@ -89,7 +89,7 @@ class UserService:
             
             if plan:
                 # Use discounted_plan_price if available, otherwise use plan.price
-                total_price = float(membership.discounted_plan_price) if membership.discounted_plan_price else float(plan.price)
+                total_price = float(plan.price) - float(membership.discounted_plan_price) if membership.discounted_plan_price else float(plan.price)
                 days_left = (membership.end_date - today).days
                 if days_left <= 7:
                     status = "expiring_soon"
@@ -107,6 +107,7 @@ class UserService:
         
         return MemberDetailResponse(
             id=user.id,
+            user_name=user.user_name,
             name=user.name,
             email=user.email,
             phone=user.phone,
