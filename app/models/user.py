@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from app.models.announcement import Announcement
     from app.models.role import Role
     from app.models.plan import Plan
+    from app.models.bank_account import BankAccount
 
 
 class Gender(str, Enum):
@@ -128,3 +129,4 @@ class User(SQLModel, table=True):
     announcements: List["Announcement"] = Relationship(back_populates="user")
     memberships: List["Membership"] = Relationship(back_populates="user")
     plan: Optional["Plan"] = Relationship(back_populates="users")
+    bank_accounts: List["BankAccount"] = Relationship(back_populates="user")

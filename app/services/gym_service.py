@@ -35,7 +35,15 @@ class GymService:
             dob=gym.dob,
             opening_hours=gym.opening_hours,
             is_active=gym.is_active,
-            gym_code=gym_code
+            gym_code=gym_code,
+            whatsapp_number=gym.whatsapp_number,
+            mobile_no=gym.mobile_no,
+            website=gym.website,
+            email=gym.email,
+            insta=gym.insta,
+            facebook=gym.facebook,
+            youtube=gym.youtube,
+            twitter=gym.twitter
         )
         self.session.add(db_gym)
         self.session.commit()
@@ -76,8 +84,8 @@ class GymService:
                 detail=f"Gym with id {gym_id} not found"
             )
 
-        # Update only provided fields
-        update_data = gym_update.model_dump(exclude_unset=True, exclude={"id"})
+        # Update only provided fields (exclude gym_id as it's not a model field)
+        update_data = gym_update.model_dump(exclude_unset=True, exclude={"gym_id"})
         for field, value in update_data.items():
             setattr(db_gym, field, value)
 

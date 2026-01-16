@@ -17,6 +17,14 @@ class GymCreate(BaseModel):
     dob: Optional[str] = Field(description="The gym's date of birth", nullable=True)
     opening_hours: Optional[str] = Field(description="The gym's opening hours", nullable=True)
     is_active: bool = Field(description="Whether the gym is active", default=True)
+    whatsapp_number: Optional[str] = Field(description="The gym's WhatsApp number", default=None)
+    mobile_no: Optional[str] = Field(description="The gym's mobile number", default=None)
+    website: Optional[str] = Field(description="The gym's website URL", default=None)
+    email: Optional[str] = Field(description="The gym's email address", default=None)
+    insta: Optional[str] = Field(description="The gym's Instagram handle/URL", default=None)
+    facebook: Optional[str] = Field(description="The gym's Facebook page URL", default=None)
+    youtube: Optional[str] = Field(description="The gym's YouTube channel URL", default=None)
+    twitter: Optional[str] = Field(description="The gym's Twitter handle/URL", default=None)
 
 
 class GymUpdate(BaseModel):
@@ -33,6 +41,14 @@ class GymUpdate(BaseModel):
     opening_hours: Optional[str] = Field(default=None, description="The gym's opening hours")
     is_active: Optional[bool] = Field(default=None, description="Whether the gym is active")
     gym_code: Optional[str] = Field(default=None, description="The gym's code")
+    whatsapp_number: Optional[str] = Field(default=None, description="The gym's WhatsApp number")
+    mobile_no: Optional[str] = Field(default=None, description="The gym's mobile number")
+    website: Optional[str] = Field(default=None, description="The gym's website URL")
+    email: Optional[str] = Field(default=None, description="The gym's email address")
+    insta: Optional[str] = Field(default=None, description="The gym's Instagram handle/URL")
+    facebook: Optional[str] = Field(default=None, description="The gym's Facebook page URL")
+    youtube: Optional[str] = Field(default=None, description="The gym's YouTube channel URL")
+    twitter: Optional[str] = Field(default=None, description="The gym's Twitter handle/URL")
 
 
 class GymResponse(BaseModel):
@@ -50,6 +66,14 @@ class GymResponse(BaseModel):
     opening_hours: Optional[str] = None
     is_active: bool
     gym_code: Optional[str] = None
+    whatsapp_number: Optional[str] = None
+    mobile_no: Optional[str] = None
+    website: Optional[str] = None
+    email: Optional[str] = None
+    insta: Optional[str] = None
+    facebook: Optional[str] = None
+    youtube: Optional[str] = None
+    twitter: Optional[str] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

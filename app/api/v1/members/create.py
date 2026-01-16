@@ -1,7 +1,7 @@
 from fastapi import APIRouter, status
 from sqlmodel import select
 from app.core.permissions import require_any_authenticated
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import NotFoundError, AlreadyExistsError
 from app.db.db import SessionDep
 from app.models.user import User
 from app.models.role import Role as RoleModel
@@ -106,6 +106,12 @@ def mark_attendance(
             message=str(e.detail) if hasattr(e, 'detail') else str(e),
             data=None,
             status_code=status.HTTP_404_NOT_FOUND
+        )
+    except AlreadyExistsError as e:
+        return failure_response(
+            message=str(e.detail) if hasattr(e, 'detail') else str(e),
+            data=None,
+            status_code=status.HTTP_400_BAD_REQUEST
         )
 
 
