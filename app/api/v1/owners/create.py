@@ -56,8 +56,8 @@ def add_member(
         member_user_name=request.member_user_name,
         gym_id=request.gym_id,
         plan_id=request.plan_id,
-        bonus_duration=request.bonus_duration,
-        discounted_plan_price=request.discounted_plan_price
+        new_duration=request.new_duration,
+        new_price=request.new_price
     )
     return success_response(data=member_data, message="Member added to gym successfully")
 

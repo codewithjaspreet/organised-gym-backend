@@ -8,12 +8,14 @@ from app.schemas.user import UserResponse
 from app.schemas.membership import MembershipResponse
 from app.schemas.billing import PaymentResponse
 from app.schemas.dashboard import DashboardKPIsResponse
+from app.schemas.gym import GymResponse
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
 from app.services.user_service import UserService
 from app.services.membership_service import MembershipService
 from app.services.billing_service import BillingService
 from app.services.dashboard_service import DashboardService
+from app.services.gym_service import GymService
 
 router = APIRouter(prefix="/read", tags=["members"])
 
@@ -116,4 +118,38 @@ def get_payment(
         )
     
     return success_response(data=payment, message="Payment fetched successfully")
+
+
+@router.get("/gym", response_model=APIResponse[GymResponse], status_code=status.HTTP_200_OK)
+def get_member_gym_info(
+    session: SessionDep = None,
+    current_user: User = require_any_authenticated
+):
+    """Get member's gym information"""
+    # Get role name from database
+    stmt = select(RoleModel).where(RoleModel.id == current_user.role_id)
+    role = session.exec(stmt).first()
+    if not role:
+        return failure_response(
+            message="User role not found",
+            data=None
+        )
+    
+    # Verify user is a MEMBER
+    if role.name != "MEMBER":
+        return failure_response(
+            message="Only members can access this endpoint",
+            data=None
+        )
+    
+    # Check if member has a gym assigned
+    if not current_user.gym_id:
+        return failure_response(
+            message="No gym assigned to this member",
+            data=None
+        )
+    
+    gym_service = GymService(session=session)
+    gym_data = gym_service.get_gym(current_user.gym_id)
+    return success_response(data=gym_data, message="Gym information fetched successfully")
 
