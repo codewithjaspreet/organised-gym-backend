@@ -1,7 +1,7 @@
 from fastapi import APIRouter, status, Query
 from sqlmodel import select
 from typing import Optional, List
-from app.core.permissions import require_admin
+from app.core.permissions import require_admin, require_any_authenticated
 from app.db.db import SessionDep
 from app.models.user import User, RoleEnum
 from app.models.gym import Gym
@@ -36,30 +36,23 @@ def get_owner_gym(current_user: User, session: SessionDep) -> Optional[Gym]:
 
 
 @router.get("/profile", response_model=APIResponse[UserResponse], status_code=status.HTTP_200_OK)
-def get_owner_profile(
+def get_profile(
     session: SessionDep = None,
-    current_user: User = require_admin
+    current_user: User = require_any_authenticated
 ):
-    """Get owner profile"""
-    # Get owner's gym
-    gym = get_owner_gym(current_user, session)
+    """Get user profile - works for all roles (ADMIN, MEMBER, STAFF, TRAINER)"""
     
-    # Get role name
-    stmt = select(Role).where(Role.id == current_user.role_id)
-    role = session.exec(stmt).first()
-    role_name = role.name if role else None
+    # Get owner's gym (only for owners/admins)
+    gym = get_owner_gym(current_user, session)
     
     user_service = UserService(session=session)
     user_data = user_service.get_user(current_user.id)
     
-    # Update gym_id if gym exists
+    # Update gym_id if gym exists (for owners/admins)
     if gym:
         user_data.gym_id = gym.id
     
-    # Add role_name to response (temporary workaround - would need schema update for proper solution)
-    # For now, role_id is already in response, and we can add role_name via a custom response
-    # But since UserResponse doesn't have role_name, we'll ensure gym_id is set correctly
-    return success_response(data=user_data, message="Owner profile fetched successfully")
+    return success_response(data=user_data, message="Profile fetched successfully")
 
 
 @router.get("/members", response_model=APIResponse[MemberListResponse], status_code=status.HTTP_200_OK)

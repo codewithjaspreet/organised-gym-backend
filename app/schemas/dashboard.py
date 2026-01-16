@@ -28,6 +28,8 @@ class DashboardKPIsResponse(BaseModel):
     unpaid_percentage: Optional[float] = Field(default=0.0, description="Percentage of fees unpaid")
     
     # Member-specific metrics
+    user_name: Optional[str] = Field(default=None, description="The user's username")
+    name: Optional[str] = Field(default=None, description="The user's name")
     membership_expiry_date: Optional[str] = Field(default=None, description="Membership expiry date in Indian format (DD-MM-YYYY)")
     membership_days_remaining: Optional[int] = Field(default=None, description="Days remaining until membership expiry")
     last_7_days_attendance: Optional[List[DailyAttendanceResponse]] = Field(default=[], description="Last 7 days attendance streak")

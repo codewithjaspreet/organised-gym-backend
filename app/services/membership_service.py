@@ -18,8 +18,8 @@ class MembershipService:
             end_date=membership.end_date,
             status=membership.status,
             plan_id=membership.plan_id,
-            bonus_duration=membership.bonus_duration,
-            discounted_plan_price=membership.discounted_plan_price
+            new_duration=membership.new_duration,
+            new_price=membership.new_price
         )
         self.session.add(db_membership)
         self.session.commit()
