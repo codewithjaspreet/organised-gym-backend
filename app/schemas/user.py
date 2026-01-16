@@ -63,6 +63,7 @@ class UserResponse(BaseModel):
     address_line1: str
     address_line2: Optional[str] = None
     gym_id: Optional[str] = None
+    gym_name: Optional[str] = None
     plan_id: Optional[str] = None
     role_id: str
     role_name: Optional[str] = None
@@ -134,6 +135,7 @@ class AvailableMemberResponse(BaseModel):
     name: str
     email: str
     phone: str
+    user_name: str
 
 
 class AvailableMembersListResponse(BaseModel):
