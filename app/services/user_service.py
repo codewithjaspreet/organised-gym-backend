@@ -90,13 +90,6 @@ class UserService:
             if plan:
                 # Use discounted_plan_price if available, otherwise use plan.price
                 total_price = float(membership.discounted_plan_price) if membership.discounted_plan_price else float(plan.price)
-                
-                # Calculate monthly price (approximate from total price and duration)
-                # Use actual membership duration (plan duration + bonus duration)
-                total_duration = plan.duration_days + (membership.bonus_duration or 0)
-                monthly_price = total_price / (total_duration / 30.0) if total_duration > 0 else total_price
-                
-                # Determine status
                 days_left = (membership.end_date - today).days
                 if days_left <= 7:
                     status = "expiring_soon"
@@ -107,7 +100,7 @@ class UserService:
                     plan_id=plan.id,
                     plan_name=plan.name,
                     expiry_date=membership.end_date.isoformat(),
-                    monthly_price=round(monthly_price, 2),
+                    monthly_price=round(total_price, 2),
                     status=status,
                     days_left=days_left
                 )
