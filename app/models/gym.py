@@ -59,6 +59,38 @@ class Gym(SQLModel, table=True):
         unique=True,
         index=True
     )
+    whatsapp_number: Optional[str] = Field(
+        description="The gym's WhatsApp number",
+        nullable=True
+    )
+    mobile_no: Optional[str] = Field(
+        description="The gym's mobile number",
+        nullable=True
+    )
+    website: Optional[str] = Field(
+        description="The gym's website URL",
+        nullable=True
+    )
+    email: Optional[str] = Field(
+        description="The gym's email address",
+        nullable=True
+    )
+    insta: Optional[str] = Field(
+        description="The gym's Instagram handle/URL",
+        nullable=True
+    )
+    facebook: Optional[str] = Field(
+        description="The gym's Facebook page URL",
+        nullable=True
+    )
+    youtube: Optional[str] = Field(
+        description="The gym's YouTube channel URL",
+        nullable=True
+    )
+    twitter: Optional[str] = Field(
+        description="The gym's Twitter handle/URL",
+        nullable=True
+    )
     created_at: datetime = Field(
         description="The gym's creation date",
         default_factory=datetime.now
