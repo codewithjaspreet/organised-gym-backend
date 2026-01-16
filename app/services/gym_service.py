@@ -1,5 +1,7 @@
 from typing import List
 from datetime import datetime
+import random
+import string
 
 from sqlmodel import select
 from app.core.exceptions import AlreadyExistsError, NotFoundError
@@ -17,6 +19,9 @@ class GymService:
 
 
     def create_gym(self, gym: GymCreate) -> GymResponse:
+        # Generate unique 6-letter gym code
+        gym_code = self._generate_gym_code()
+        
         db_gym = Gym(
             owner_id=gym.owner_id,
             name=gym.name,
@@ -29,13 +34,27 @@ class GymService:
             country=gym.country,
             dob=gym.dob,
             opening_hours=gym.opening_hours,
-            is_active=gym.is_active
+            is_active=gym.is_active,
+            gym_code=gym_code
         )
         self.session.add(db_gym)
         self.session.commit()
         self.session.refresh(db_gym)
 
         return GymResponse.model_validate(db_gym.model_dump())
+    
+    def _generate_gym_code(self) -> str:
+        """Generate a unique 6-letter coupon-type code"""
+        while True:
+            # Generate 6 random uppercase letters
+            code = ''.join(random.choices(string.ascii_uppercase, k=6))
+            
+            # Check if code already exists
+            stmt = select(Gym).where(Gym.gym_code == code)
+            existing = self.session.exec(stmt).first()
+            
+            if not existing:
+                return code
         
         
 

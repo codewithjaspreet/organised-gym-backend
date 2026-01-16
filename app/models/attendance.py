@@ -28,6 +28,10 @@ class Attendance(SQLModel, table=True):
         description="The gym id",
         foreign_key="gyms.id"
     )
+    focus: Optional[str] = Field(
+        description="Today's workout focus/goal",
+        nullable=True
+    )
     
     # Relationships
     user: Optional["User"] = Relationship(back_populates="attendances")

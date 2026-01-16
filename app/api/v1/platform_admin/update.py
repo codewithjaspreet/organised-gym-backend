@@ -1,7 +1,9 @@
 from fastapi import APIRouter, status
+from sqlmodel import select
 from app.core.permissions import require_og
 from app.db.db import SessionDep
 from app.models.user import User
+from app.models.role import Role as RoleModel
 from app.schemas.user import UserResponse, UserUpdate
 from app.schemas.gym import GymResponse, GymUpdate
 from app.schemas.og_plan import OGPlanResponse, OGPlanUpdate
@@ -35,16 +37,27 @@ def update_owner(
     return success_response(data=updated_owner, message="Owner updated successfully")
 
 
-@router.put("/gyms/{gym_id}", response_model=APIResponse[GymResponse])
+@router.put("/gym", response_model=APIResponse[GymResponse])
 def update_gym(
-    gym_id: str,
     gym: GymUpdate,
     session: SessionDep = None,
     current_user: User = require_og
 ):
-    """Update a gym"""
+    """Update gym information - accessible by PLATFORM_ADMIN (OG) role. Requires gym_id in request body."""
+    if not gym.gym_id:
+        return failure_response(
+            message="gym_id is required",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+    
+    gym_id_to_update = gym.gym_id
+    
+    # Remove gym_id from update data before passing to service
+    update_data = gym.model_dump(exclude_unset=True, exclude={"gym_id"})
+    gym_update = GymUpdate(**update_data)
+    
     gym_service = GymService(session=session)
-    updated_gym = gym_service.update_gym(gym_id, gym)
+    updated_gym = gym_service.update_gym(gym_id_to_update, gym_update)
     return success_response(data=updated_gym, message="Gym updated successfully")
 
 

@@ -1,9 +1,10 @@
 from fastapi import APIRouter, status
 from sqlmodel import select
-from app.core.permissions import require_admin
+from app.core.permissions import require_admin, require_og_or_admin
 from app.db.db import SessionDep
 from app.models.user import User
 from app.models.gym import Gym
+from app.models.role import Role as RoleModel
 from app.schemas.user import UserResponse, UserUpdate
 from app.schemas.gym import GymResponse, GymUpdate
 from app.schemas.plan import PlanResponse, PlanUpdate
@@ -38,20 +39,26 @@ def update_owner_profile(
 
 
 @router.put("/gym", response_model=APIResponse[GymResponse])
-def update_owner_gym(
+def update_gym(
     gym: GymUpdate,
     session: SessionDep = None,
     current_user: User = require_admin
 ):
-    """Update owner's gym information"""
-    owner_gym = get_owner_gym(current_user, session)
-    if not owner_gym:
+    """Update gym information - accessible by ADMIN role. Requires gym_id in request body."""
+    if not gym.gym_id:
         return failure_response(
-            message="No gym found for this owner",
-            status_code=status.HTTP_404_NOT_FOUND
+            message="gym_id is required",
+            status_code=status.HTTP_400_BAD_REQUEST
         )
+    
+    gym_id_to_update = gym.gym_id
+    
+    # Remove gym_id from update data before passing to service
+    update_data = gym.model_dump(exclude_unset=True, exclude={"gym_id"})
+    gym_update = GymUpdate(**update_data)
+    
     gym_service = GymService(session=session)
-    updated_gym = gym_service.update_gym(owner_gym.id, gym)
+    updated_gym = gym_service.update_gym(gym_id_to_update, gym_update)
     return success_response(data=updated_gym, message="Gym updated successfully")
 
 

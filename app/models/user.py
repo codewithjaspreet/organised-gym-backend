@@ -24,7 +24,7 @@ class Gender(str, Enum):
 
 # Keep Role enum for backward compatibility and quick checks
 class RoleEnum(str, Enum):
-    OG = "OG"  # Platform owner
+    OG = "PLATFORM_ADMIN"  # Platform owner
     ADMIN = "ADMIN"  # Gym owner
     MEMBER = "MEMBER"
     TRAINER = "TRAINER"

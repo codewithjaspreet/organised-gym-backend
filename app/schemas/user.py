@@ -21,7 +21,7 @@ class UserCreate(BaseModel):
     dob: date
     gym_id: Optional[str] = None
     plan_id: Optional[str] = None
-    role: str  # Role name: "OG", "ADMIN", "MEMBER", "TRAINER", "STAFF"
+    role: str  # Role name: "PLATFORM_ADMIN", "ADMIN", "MEMBER", "TRAINER", "STAFF"
     device_token: Optional[str] = None
     app_version: Optional[str] = None
     platform: Optional[str] = None

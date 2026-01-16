@@ -11,6 +11,8 @@ from app.schemas.dashboard import DashboardKPIsResponse
 from app.schemas.gym import GymResponse
 from app.schemas.plan import PlanResponse, PlanListResponse
 from app.schemas.gym_rule import GymRuleResponse, GymRuleListResponse
+from app.schemas.attendance import ActiveCheckInStatusResponse
+from app.services.attendance_service import AttendanceService
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
 from app.services.user_service import UserService
@@ -239,4 +241,26 @@ def get_all_gym_rules(
     gym_service = GymService(session=session)
     rules_data = gym_service.get_all_gym_rules(gym_id=current_user.gym_id)
     return success_response(data=rules_data, message="Gym rules fetched successfully")
+
+
+@router.get("/checkin-status", response_model=APIResponse[ActiveCheckInStatusResponse], status_code=status.HTTP_200_OK)
+def get_checkin_status(
+    session: SessionDep = None,
+    current_user: User = require_any_authenticated
+):
+    """Get active check-in status for the current member"""
+    # Get role name from database
+    stmt = select(RoleModel).where(RoleModel.id == current_user.role_id)
+    role = session.exec(stmt).first()
+    
+    if not role or role.name != "MEMBER":
+        return failure_response(
+            message="Only members can check their check-in status",
+            data=None,
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    attendance_service = AttendanceService(session=session)
+    status_data = attendance_service.has_active_checkin(user_id=current_user.id)
+    return success_response(data=status_data, message="Check-in status fetched successfully")
 

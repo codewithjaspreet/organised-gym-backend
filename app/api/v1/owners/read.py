@@ -17,13 +17,16 @@ from app.schemas.dashboard import DashboardKPIsResponse
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
 from app.services.user_service import UserService
-from app.core.exceptions import UserNotFoundError
+from app.core.exceptions import NotFoundError, UserNotFoundError
 from app.services.gym_service import GymService
 from app.services.plan_service import PlanService
 from app.services.membership_service import MembershipService
 from app.services.announcement_service import AnnouncementService
 from app.services.notification_service import NotificationService
 from app.services.dashboard_service import DashboardService
+from app.services.attendance_service import AttendanceService
+from app.schemas.attendance import DailyAttendanceResponse
+from datetime import date
 
 router = APIRouter(prefix="/read", tags=["owners"])
 
@@ -280,6 +283,73 @@ def get_all_gym_rules(
     gym_service = GymService(session=session)
     rules_data = gym_service.get_all_gym_rules(gym_id=gym.id)
     return success_response(data=rules_data, message="Gym rules fetched successfully")
+
+
+@router.get("/attendance", response_model=APIResponse[DailyAttendanceResponse], status_code=status.HTTP_200_OK)
+def get_daily_attendance(
+    target_date: Optional[str] = Query(
+        None,
+        description="Date in YYYY-MM-DD format. Defaults to today if not provided."
+    ),
+    filter_status: Optional[str] = Query(
+        None,
+        description="Filter by status: 'present', 'absent', or None for all",
+        regex="^(present|absent)$"
+    ),
+    search: Optional[str] = Query(
+        None,
+        description="Search by member name or username"
+    ),
+    session: SessionDep = None,
+    current_user: User = require_admin
+):
+    """
+    Get daily attendance for the owner's gym with date query, filtering, and search.
+    
+    Query Parameters:
+    - target_date: Date in YYYY-MM-DD format (defaults to today)
+    - filter_status: 'present' or 'absent' to filter members (optional)
+    - search: Search query for member name or username (optional)
+    """
+    gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            data=None,
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    
+    # Parse target_date or use today
+    if target_date:
+        try:
+            query_date = date.fromisoformat(target_date)
+        except ValueError:
+            return failure_response(
+                message="Invalid date format. Use YYYY-MM-DD",
+                data=None,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+    else:
+        query_date = date.today()
+    
+    attendance_service = AttendanceService(session=session)
+    try:
+        attendance_data = attendance_service.get_daily_attendance(
+            gym_id=gym.id,
+            target_date=query_date,
+            filter_status=filter_status,
+            search_query=search
+        )
+        return success_response(
+            data=attendance_data,
+            message="Daily attendance fetched successfully"
+        )
+    except NotFoundError as e:
+        return failure_response(
+            message=str(e.detail) if hasattr(e, 'detail') else str(e),
+            data=None,
+            status_code=status.HTTP_404_NOT_FOUND
+        )
 
 
 @router.get("/rules/{rule_id}", response_model=APIResponse[GymRuleResponse], status_code=status.HTTP_200_OK)
