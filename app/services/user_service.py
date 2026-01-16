@@ -79,8 +79,13 @@ class UserService:
             plan = self.session.exec(plan_stmt).first()
             
             if plan:
+                # Use discounted_plan_price if available, otherwise use plan.price
+                total_price = float(membership.discounted_plan_price) if membership.discounted_plan_price else float(plan.price)
+                
                 # Calculate monthly price (approximate from total price and duration)
-                monthly_price = float(plan.price) / (plan.duration_days / 30.0) if plan.duration_days > 0 else float(plan.price)
+                # Use actual membership duration (plan duration + bonus duration)
+                total_duration = plan.duration_days + (membership.bonus_duration or 0)
+                monthly_price = total_price / (total_duration / 30.0) if total_duration > 0 else total_price
                 
                 # Determine status
                 days_left = (membership.end_date - today).days
