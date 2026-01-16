@@ -9,6 +9,8 @@ from app.schemas.membership import MembershipResponse
 from app.schemas.billing import PaymentResponse
 from app.schemas.dashboard import DashboardKPIsResponse
 from app.schemas.gym import GymResponse
+from app.schemas.plan import PlanResponse, PlanListResponse
+from app.schemas.gym_rule import GymRuleResponse, GymRuleListResponse
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
 from app.services.user_service import UserService
@@ -16,6 +18,7 @@ from app.services.membership_service import MembershipService
 from app.services.billing_service import BillingService
 from app.services.dashboard_service import DashboardService
 from app.services.gym_service import GymService
+from app.services.plan_service import PlanService
 
 router = APIRouter(prefix="/read", tags=["members"])
 
@@ -162,4 +165,78 @@ def get_member_gym_info(
             data=None,
             status_code=status.HTTP_404_NOT_FOUND
         )
+
+
+@router.get("/plans", response_model=APIResponse[PlanListResponse], status_code=status.HTTP_200_OK)
+def get_all_plans(
+    session: SessionDep = None,
+    current_user: User = require_any_authenticated
+):
+    """Get all plans for the member's gym"""
+    # Get role name from database
+    stmt = select(RoleModel).where(RoleModel.id == current_user.role_id)
+    role = session.exec(stmt).first()
+    if not role:
+        return failure_response(
+            message="User role not found",
+            data=None,
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    
+    # Verify user is a MEMBER
+    if role.name != "MEMBER":
+        return failure_response(
+            message="Only members can access this endpoint",
+            data=None,
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    # Check if member has a gym assigned
+    if not current_user.gym_id:
+        return failure_response(
+            message="No gym assigned to this member",
+            data=None,
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    
+    plan_service = PlanService(session=session)
+    plans_data = plan_service.get_all_plans(gym_id=current_user.gym_id)
+    return success_response(data=plans_data, message="Plans fetched successfully")
+
+
+@router.get("/rules", response_model=APIResponse[GymRuleListResponse], status_code=status.HTTP_200_OK)
+def get_all_gym_rules(
+    session: SessionDep = None,
+    current_user: User = require_any_authenticated
+):
+    """Get all gym rules for the member's gym"""
+    # Get role name from database
+    stmt = select(RoleModel).where(RoleModel.id == current_user.role_id)
+    role = session.exec(stmt).first()
+    if not role:
+        return failure_response(
+            message="User role not found",
+            data=None,
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    
+    # Verify user is a MEMBER
+    if role.name != "MEMBER":
+        return failure_response(
+            message="Only members can access this endpoint",
+            data=None,
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    # Check if member has a gym assigned
+    if not current_user.gym_id:
+        return failure_response(
+            message="No gym assigned to this member",
+            data=None,
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    
+    gym_service = GymService(session=session)
+    rules_data = gym_service.get_all_gym_rules(gym_id=current_user.gym_id)
+    return success_response(data=rules_data, message="Gym rules fetched successfully")
 
