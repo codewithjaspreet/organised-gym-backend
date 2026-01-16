@@ -99,6 +99,7 @@ class CurrentPlanResponse(BaseModel):
 class MemberDetailResponse(BaseModel):
     """Detailed member response for detail page"""
     id: str
+    user_name: str
     name: str
     email: str
     phone: str
