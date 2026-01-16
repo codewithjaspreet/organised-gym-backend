@@ -126,30 +126,40 @@ def get_member_gym_info(
     current_user: User = require_any_authenticated
 ):
     """Get member's gym information"""
-    # Get role name from database
+    # Get role name from database (same pattern as dashboard endpoint)
     stmt = select(RoleModel).where(RoleModel.id == current_user.role_id)
     role = session.exec(stmt).first()
     if not role:
         return failure_response(
             message="User role not found",
-            data=None
+            data=None,
+            status_code=status.HTTP_404_NOT_FOUND
         )
     
     # Verify user is a MEMBER
     if role.name != "MEMBER":
         return failure_response(
             message="Only members can access this endpoint",
-            data=None
+            data=None,
+            status_code=status.HTTP_403_FORBIDDEN
         )
     
     # Check if member has a gym assigned
     if not current_user.gym_id:
         return failure_response(
             message="No gym assigned to this member",
-            data=None
+            data=None,
+            status_code=status.HTTP_404_NOT_FOUND
         )
     
     gym_service = GymService(session=session)
-    gym_data = gym_service.get_gym(current_user.gym_id)
-    return success_response(data=gym_data, message="Gym information fetched successfully")
+    try:
+        gym_data = gym_service.get_gym(current_user.gym_id)
+        return success_response(data=gym_data, message="Gym information fetched successfully")
+    except Exception as e:
+        return failure_response(
+            message=str(e.detail) if hasattr(e, 'detail') else "Gym not found",
+            data=None,
+            status_code=status.HTTP_404_NOT_FOUND
+        )
 
