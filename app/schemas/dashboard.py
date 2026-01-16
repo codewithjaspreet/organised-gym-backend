@@ -34,6 +34,9 @@ class DashboardKPIsResponse(BaseModel):
     membership_days_remaining: Optional[int] = Field(default=None, description="Days remaining until membership expiry")
     last_7_days_attendance: Optional[List[DailyAttendanceResponse]] = Field(default=[], description="Last 7 days attendance streak")
     quote: Optional[str] = Field(default=None, description="Daily motivational quote based on day of month")
+    check_in_time: Optional[str] = Field(default=None, description="Today's check-in time in Indian format (24hr clock)")
+    checkout_time: Optional[str] = Field(default=None, description="Today's checkout time in Indian format (24hr clock)")
+    focus: Optional[str] = Field(default=None, description="Today's workout focus")
 
 class DashboardKPIsRequest(BaseModel):
     gym_id : str = Field(description="The gym id")

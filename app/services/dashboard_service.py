@@ -1,6 +1,7 @@
 from typing import Optional, List
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 from sqlmodel import select, func, and_, or_
 from app.db.db import SessionDep
 from app.models.user import Role, User
@@ -256,6 +257,48 @@ class DashboardService:
         # Get daily quote based on day of month
         quote = self._get_daily_quote()
         
+        # Get today's attendance record (check-in time, checkout time, focus)
+        check_in_time = None
+        checkout_time = None
+        focus = None
+        
+        ist = ZoneInfo("Asia/Kolkata")
+        today_start = datetime.combine(today, datetime.min.time()).replace(tzinfo=ist)
+        today_end = datetime.combine(today, datetime.max.time()).replace(tzinfo=ist)
+        
+        today_attendance_stmt = select(Attendance).where(
+            and_(
+                Attendance.user_id == user_id,
+                Attendance.check_in_at >= today_start,
+                Attendance.check_in_at <= today_end
+            )
+        ).order_by(Attendance.check_in_at.desc())
+        
+        today_attendance = self.session.exec(today_attendance_stmt).first()
+        
+        if today_attendance:
+            # Format check-in time
+            check_in_at = today_attendance.check_in_at
+            if check_in_at.tzinfo is None:
+                from datetime import timezone as tz
+                check_in_at = check_in_at.replace(tzinfo=tz.utc).astimezone(ist)
+            else:
+                check_in_at = check_in_at.astimezone(ist)
+            check_in_time = check_in_at.strftime("%d-%m-%Y %H:%M:%S")
+            
+            # Format checkout time if available
+            if today_attendance.check_out_at:
+                check_out_at = today_attendance.check_out_at
+                if check_out_at.tzinfo is None:
+                    from datetime import timezone as tz
+                    check_out_at = check_out_at.replace(tzinfo=tz.utc).astimezone(ist)
+                else:
+                    check_out_at = check_out_at.astimezone(ist)
+                checkout_time = check_out_at.strftime("%d-%m-%Y %H:%M:%S")
+            
+            # Get focus
+            focus = today_attendance.focus
+        
         return DashboardKPIsResponse(
             active_members=None,
             total_check_ins_today=None,
@@ -274,7 +317,10 @@ class DashboardService:
             membership_expiry_date=membership_expiry_date,
             membership_days_remaining=membership_days_remaining,
             last_7_days_attendance=last_7_days_attendance,
-            quote=quote
+            quote=quote,
+            check_in_time=check_in_time,
+            checkout_time=checkout_time,
+            focus=focus
         )
     
     def _get_last_7_days_attendance(self, user_id: str) -> List[DailyAttendanceResponse]:
