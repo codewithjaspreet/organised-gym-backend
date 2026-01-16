@@ -33,6 +33,7 @@ class DashboardKPIsResponse(BaseModel):
     membership_expiry_date: Optional[str] = Field(default=None, description="Membership expiry date in Indian format (DD-MM-YYYY)")
     membership_days_remaining: Optional[int] = Field(default=None, description="Days remaining until membership expiry")
     last_7_days_attendance: Optional[List[DailyAttendanceResponse]] = Field(default=[], description="Last 7 days attendance streak")
+    quote: Optional[str] = Field(default=None, description="Daily motivational quote based on day of month")
 
 class DashboardKPIsRequest(BaseModel):
     gym_id : str = Field(description="The gym id")

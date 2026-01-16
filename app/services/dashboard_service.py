@@ -253,6 +253,9 @@ class DashboardService:
         # Get last 7 days attendance streak
         last_7_days_attendance = self._get_last_7_days_attendance(user_id)
         
+        # Get daily quote based on day of month
+        quote = self._get_daily_quote()
+        
         return DashboardKPIsResponse(
             active_members=None,
             total_check_ins_today=None,
@@ -270,7 +273,8 @@ class DashboardService:
             name=name,
             membership_expiry_date=membership_expiry_date,
             membership_days_remaining=membership_days_remaining,
-            last_7_days_attendance=last_7_days_attendance
+            last_7_days_attendance=last_7_days_attendance,
+            quote=quote
         )
     
     def _get_last_7_days_attendance(self, user_id: str) -> List[DailyAttendanceResponse]:
@@ -302,6 +306,46 @@ class DashboardService:
             )
         
         return attendance_list
+    
+    def _get_daily_quote(self) -> str:
+        """Get motivational quote based on current day of the month"""
+        QUOTES = {
+            "1": "Sweat today, shine tomorrow.",
+            "2": "No pain, no gain.",
+            "3": "Push harder than yesterday.",
+            "4": "Your body can stand almost anything. It's your mind you have to convince.",
+            "5": "Strength grows in the moments you think you can't go on.",
+            "6": "Lift heavy, love lightly.",
+            "7": "Train insane or remain the same.",
+            "8": "The gym is my therapy.",
+            "9": "Beast mode: ON.",
+            "10": "Muscles are earned, not given.",
+            "11": "One more rep, one more dream.",
+            "12": "Grind now, glow later.",
+            "13": "Weights before dates.",
+            "14": "Pain is temporary, pride is forever.",
+            "15": "Build your body, build your future.",
+            "16": "Sweat is fat crying.",
+            "17": "Champions train, losers complain.",
+            "18": "Every rep counts.",
+            "19": "Rise and grind.",
+            "20": "Stronger every day.",
+            "21": "Fuel your hustle.",
+            "22": "Earn your body.",
+            "23": "No excuses, just results.",
+            "24": "Lift, laugh, repeat.",
+            "25": "Progress over perfection.",
+            "26": "Iron sharpens iron.",
+            "27": "Conquer from within.",
+            "28": "Flex on them haters.",
+            "29": "Workout because you love your body.",
+            "30": "Dream big, lift bigger.",
+            "31": "Unleash the beast."
+        }
+        
+        day_of_month = date.today().day
+        quote_key = str(day_of_month)
+        return QUOTES.get(quote_key, QUOTES["1"])
 
     def _get_staff_kpis(self, gym_id: Optional[str]) -> DashboardKPIsResponse:
         """Get KPIs for STAFF/TRAINER role - limited gym statistics"""
