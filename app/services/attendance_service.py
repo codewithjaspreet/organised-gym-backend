@@ -2,7 +2,7 @@ from datetime import datetime, date
 from zoneinfo import ZoneInfo
 from sqlmodel import select, and_, func, or_
 from typing import List, Optional
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import NotFoundError, AlreadyExistsError
 from app.db.db import SessionDep
 from app.models.attendance import Attendance
 from app.models.gym import Gym
@@ -129,9 +129,26 @@ class AttendanceService:
         if gym.gym_code != request.gym_code:
             raise NotFoundError(detail="Invalid gym code")
         
-        # Create attendance record with current datetime
+        # Check if user has already checked in today
         check_in_time = datetime.now(ZoneInfo("Asia/Kolkata"))
+        today_start = datetime.combine(check_in_time.date(), datetime.min.time()).replace(tzinfo=ZoneInfo("Asia/Kolkata"))
+        today_end = datetime.combine(check_in_time.date(), datetime.max.time()).replace(tzinfo=ZoneInfo("Asia/Kolkata"))
         
+        # Check for existing attendance today
+        existing_attendance_stmt = select(Attendance).where(
+            and_(
+                Attendance.user_id == user_id,
+                Attendance.gym_id == request.gym_id,
+                Attendance.check_in_at >= today_start,
+                Attendance.check_in_at <= today_end
+            )
+        )
+        existing_attendance = self.session.exec(existing_attendance_stmt).first()
+        
+        if existing_attendance:
+            raise AlreadyExistsError(detail="You have already checked in today. You can only check in once per day.")
+        
+        # Create attendance record with current datetime
         db_attendance = Attendance(
             user_id=user_id,
             gym_id=request.gym_id,
@@ -207,14 +224,40 @@ class AttendanceService:
         )
 
     def has_active_checkin(self, user_id: str) -> ActiveCheckInStatusResponse:
-        """Check if member has an active check-in (checked in but not checked out)"""
+        """Check if member has an active check-in (checked in today but not checked out)"""
+        # Get current time in IST
+        now_ist = datetime.now(ZoneInfo("Asia/Kolkata"))
+        today_date = now_ist.date()
+        
+        # Query for active check-in (checked in and not checked out)
+        # We'll filter by date after fetching to handle timezone issues
         stmt = select(Attendance).where(
-            Attendance.user_id == user_id,
-            Attendance.check_out_at.is_(None)
+            and_(
+                Attendance.user_id == user_id,
+                Attendance.check_out_at.is_(None)
+            )
         ).order_by(Attendance.check_in_at.desc())
         
-        db_attendance = self.session.exec(stmt).first()
-        has_active = db_attendance is not None
+        all_active_checkins = self.session.exec(stmt).all()
+        
+        # Filter to find today's check-in (handle timezone-aware and naive datetimes)
+        has_active = False
+        for attendance in all_active_checkins:
+            check_in_at = attendance.check_in_at
+            
+            # Convert to IST if timezone-aware, or assume it's already in IST if naive
+            if check_in_at.tzinfo is None:
+                # If naive, assume it's stored as UTC and convert to IST
+                from datetime import timezone as tz
+                check_in_at_ist = check_in_at.replace(tzinfo=tz.utc).astimezone(ZoneInfo("Asia/Kolkata"))
+            else:
+                # If timezone-aware, convert to IST
+                check_in_at_ist = check_in_at.astimezone(ZoneInfo("Asia/Kolkata"))
+            
+            # Check if check-in date matches today
+            if check_in_at_ist.date() == today_date:
+                has_active = True
+                break
         
         return ActiveCheckInStatusResponse(has_active_checkin=has_active)
 
