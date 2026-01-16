@@ -23,6 +23,7 @@ class UserService:
 
     def get_user(self, user_id: str) -> UserResponse:
         from app.models.role import Role as RoleModel
+        from app.models.gym import Gym
         
         stmt = select(User).where(User.id == user_id)
         user = self.session.exec(stmt).first()
@@ -36,8 +37,16 @@ class UserService:
             role = self.session.exec(role_stmt).first()
             role_name = role.name if role else None
         
+        # Get gym name
+        gym_name = None
+        if user.gym_id:
+            gym_stmt = select(Gym).where(Gym.id == user.gym_id)
+            gym = self.session.exec(gym_stmt).first()
+            gym_name = gym.name if gym else None
+        
         user_dict = user.model_dump(exclude={"password_hash"})
         user_dict["role_name"] = role_name
+        user_dict["gym_name"] = gym_name
         return UserResponse(**user_dict)
 
     def get_member_detail(self, member_id: str, gym_id: str) -> MemberDetailResponse:
@@ -587,7 +596,8 @@ class UserService:
                 id=user.id,
                 name=user.name,
                 email=user.email,
-                phone=user.phone
+                phone=user.phone,
+                user_name=user.user_name
             )
             for user in users
         ]
