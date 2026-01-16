@@ -32,8 +32,8 @@ class Membership(SQLModel, table=True):
         description="The plan id",
         foreign_key="plans.id"
     )
-    bonus_duration: Optional[int] = Field(default=None, description="Bonus duration in days", nullable=True)
-    discounted_plan_price: Optional[Decimal] = Field(default=None, description="Discounted plan price", nullable=True)
+    new_duration: Optional[int] = Field(default=None, description="New duration in days (replaces plan duration)", nullable=True)
+    new_price: Optional[Decimal] = Field(default=None, description="New price (replaces plan price)", nullable=True)
     created_at: datetime = Field(
         description="The membership creation date",
         default_factory=datetime.now

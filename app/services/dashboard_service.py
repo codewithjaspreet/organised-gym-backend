@@ -222,6 +222,12 @@ class DashboardService:
         """Get KPIs for MEMBER role - personal statistics only"""
         today = date.today()
         
+        # Get user info
+        user_stmt = select(User).where(User.id == user_id)
+        user = self.session.exec(user_stmt).first()
+        user_name = user.user_name if user else None
+        name = user.name if user else None
+        
         # Get membership expiry date and days remaining
         membership_expiry_date = None
         membership_days_remaining = None
@@ -244,7 +250,7 @@ class DashboardService:
                 days_remaining = (expiry_date - today).days
                 membership_days_remaining = max(0, days_remaining)
         
-        # 6. Get last 7 days attendance streak
+        # Get last 7 days attendance streak
         last_7_days_attendance = self._get_last_7_days_attendance(user_id)
         
         return DashboardKPIsResponse(
@@ -260,6 +266,8 @@ class DashboardService:
             total_fees_pending_amount=Decimal("0.0"),
             paid_percentage=0.0,
             unpaid_percentage=0.0,
+            user_name=user_name,
+            name=name,
             membership_expiry_date=membership_expiry_date,
             membership_days_remaining=membership_days_remaining,
             last_7_days_attendance=last_7_days_attendance

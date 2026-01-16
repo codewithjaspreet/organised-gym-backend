@@ -88,8 +88,8 @@ class UserService:
             plan = self.session.exec(plan_stmt).first()
             
             if plan:
-                # Use discounted_plan_price if available, otherwise use plan.price
-                total_price = float(plan.price) - float(membership.discounted_plan_price) if membership.discounted_plan_price else float(plan.price)
+                # Use new_price if available, otherwise use plan.price
+                total_price = float(membership.new_price) if membership.new_price else float(plan.price)
                 days_left = (membership.end_date - today).days
                 if days_left <= 7:
                     status = "expiring_soon"
@@ -603,8 +603,8 @@ class UserService:
         member_user_name: str, 
         gym_id: str,
         plan_id: Optional[str] = None,
-        bonus_duration: Optional[int] = None,
-        discounted_plan_price: Optional[Decimal] = None
+        new_duration: Optional[int] = None,
+        new_price: Optional[Decimal] = None
     ) -> UserResponse:
         """Add an existing member to a gym by username and create membership if plan_id is provided"""
         from app.models.role import Role as RoleModel
@@ -654,9 +654,10 @@ class UserService:
                 raise NotFoundError(detail=f"Plan with id '{plan_id}' not found for this gym")
             
             # Calculate start and end dates
+            # Use new_duration if provided, otherwise use plan duration
             today = date.today()
-            total_duration = plan.duration_days + (bonus_duration or 0)
-            end_date = today + timedelta(days=total_duration)
+            duration = new_duration if new_duration is not None else plan.duration_days
+            end_date = today + timedelta(days=duration)
             
             # Create membership
             membership = Membership(
@@ -666,8 +667,8 @@ class UserService:
                 end_date=end_date,
                 status="active",
                 plan_id=plan_id,
-                bonus_duration=bonus_duration,
-                discounted_plan_price=discounted_plan_price
+                new_duration=new_duration,
+                new_price=new_price
             )
             self.session.add(membership)
             self.session.commit()
