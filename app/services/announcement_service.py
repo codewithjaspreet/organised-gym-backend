@@ -32,16 +32,20 @@ class AnnouncementService:
             try:
                 from app.utils.fcm_notification import send_fcm_notification_to_gym_members
                 
-                # Build data payload with dynamic route
+                # Build data payload with dynamic route from data object
                 notification_data = {
                     "announcement_id": db_announcement.id,
                     "type": "announcement",
                     "gym_id": announcement.gym_id
                 }
                 
-                # Add route if provided, otherwise use default
-                route = getattr(announcement, 'route', None) or "/gym-details"
-                notification_data["route"] = route
+                # Get route from data object, map to 'screen' in FCM payload
+                route = "/gym-details"  # default
+                if announcement.data and announcement.data.route:
+                    route = announcement.data.route
+                
+                # Map route to 'screen' in FCM notification data
+                notification_data["screen"] = route
                 
                 notification_results = send_fcm_notification_to_gym_members(
                     gym_id=announcement.gym_id,
