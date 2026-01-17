@@ -1,6 +1,11 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
+
+
+class AnnouncementData(BaseModel):
+    route: Optional[str] = Field(default="/gym-details", description="Deep link route for app navigation")
+
 
 class AnnouncementCreate(BaseModel):
     title: str = Field(description="The announcement title", min_length=1)
@@ -8,7 +13,7 @@ class AnnouncementCreate(BaseModel):
     is_active: bool = Field(description="Whether the announcement is active", default=True)
     user_id: str = Field(description="The user id")
     gym_id: str = Field(description="The gym id")
-    route: Optional[str] = Field(default="/gym-details", description="Deep link route for app navigation (e.g., /gym-details, /announcements)")
+    data: Optional[AnnouncementData] = Field(default=None, description="Data object containing route for deep linking")
 
 
 class AnnouncementResponse(BaseModel):

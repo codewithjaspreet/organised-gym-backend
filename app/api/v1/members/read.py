@@ -12,7 +12,9 @@ from app.schemas.gym import GymResponse
 from app.schemas.plan import PlanResponse, PlanListResponse
 from app.schemas.gym_rule import GymRuleResponse, GymRuleListResponse
 from app.schemas.attendance import ActiveCheckInStatusResponse
+from app.schemas.announcement import AnnouncementResponse, AnnouncementListResponse
 from app.services.attendance_service import AttendanceService
+from app.services.announcement_service import AnnouncementService
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
 from app.services.user_service import UserService
@@ -263,4 +265,35 @@ def get_checkin_status(
     attendance_service = AttendanceService(session=session)
     status_data = attendance_service.has_active_checkin(user_id=current_user.id)
     return success_response(data=status_data, message="Check-in status fetched successfully")
+
+
+@router.get("/announcements", response_model=APIResponse[AnnouncementListResponse], status_code=status.HTTP_200_OK)
+def get_announcements(
+    session: SessionDep = None,
+    current_user: User = require_any_authenticated
+):
+    """Get all announcements for the member's gym"""
+    # Get role name from database
+    stmt = select(RoleModel).where(RoleModel.id == current_user.role_id)
+    role = session.exec(stmt).first()
+    
+    if not role or role.name != "MEMBER":
+        return failure_response(
+            message="Only members can access this endpoint",
+            data=None,
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    # Check if member has a gym assigned
+    if not current_user.gym_id:
+        return failure_response(
+            message="No gym assigned to this member",
+            data=None,
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    
+    announcement_service = AnnouncementService(session=session)
+    announcements = announcement_service.get_announcements_by_gym(gym_id=current_user.gym_id)
+    announcements_data = AnnouncementListResponse(announcements=announcements)
+    return success_response(data=announcements_data, message="Announcements fetched successfully")
 

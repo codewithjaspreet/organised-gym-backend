@@ -419,27 +419,3 @@ def get_announcements(
     announcements = announcement_service.get_announcements_by_gym(gym_id=gym.id)
     announcements_data = AnnouncementListResponse(announcements=announcements)
     return success_response(data=announcements_data, message="Announcements fetched successfully")
-
-
-@router.get("/notifications", response_model=APIResponse[NotificationListResponse], status_code=status.HTTP_200_OK)
-def get_notifications(
-    limit: Optional[int] = Query(100, description="Limit number of results"),
-    offset: int = Query(0, description="Offset for pagination"),
-    session: SessionDep = None,
-    current_user: User = require_admin
-):
-    """Get all notifications for the owner's gym"""
-    gym = get_owner_gym(current_user, session)
-    if not gym:
-        return failure_response(
-            message="No gym found for this owner",
-            data=None
-        )
-    notification_service = NotificationService(session=session)
-    notifications_data = notification_service.get_notifications_by_gym(
-        gym_id=gym.id,
-        limit=limit,
-        offset=offset
-    )
-    return success_response(data=notifications_data, message="Notifications fetched successfully")
-
