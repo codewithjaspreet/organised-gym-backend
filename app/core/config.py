@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
+from typing import Optional
 
 
 class Settings(BaseSettings):
@@ -10,7 +11,10 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     secret_key: str
     refresh_token_expire_days: int = 7
-    model_config = SettingsConfigDict(env_file=".env")
+    firebase_project_id: str = Field(default="app-organised-gym", description="Firebase project ID")
+    firebase_service_account_path: Optional[str] = Field(default=None, description="Firebase service account path")
+    firebase_credentials_path: Optional[str] = Field(default=None, description="Firebase credentials path (alias for firebase_service_account_path)")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
 settings = Settings()

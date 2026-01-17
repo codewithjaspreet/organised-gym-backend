@@ -8,6 +8,7 @@ class AnnouncementCreate(BaseModel):
     is_active: bool = Field(description="Whether the announcement is active", default=True)
     user_id: str = Field(description="The user id")
     gym_id: str = Field(description="The gym id")
+    route: Optional[str] = Field(default="/gym-details", description="Deep link route for app navigation (e.g., /gym-details, /announcements)")
 
 
 class AnnouncementResponse(BaseModel):

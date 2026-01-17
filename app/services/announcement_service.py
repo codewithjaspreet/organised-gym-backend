@@ -1,3 +1,4 @@
+import logging
 from typing import List
 from datetime import datetime
 from sqlmodel import select
@@ -6,6 +7,9 @@ from app.db.db import SessionDep
 from app.models.announcement import Announcement
 from app.schemas.announcement import AnnouncementCreate, AnnouncementResponse, AnnouncementUpdate
 
+# Setup logger
+logger = logging.getLogger(__name__)
+
 
 class AnnouncementService:
 
@@ -13,7 +17,7 @@ class AnnouncementService:
         self.session = session
 
     def create_announcement(self, announcement: AnnouncementCreate) -> AnnouncementResponse:
-        """Create a new announcement"""
+        """Create a new announcement and send FCM notifications to gym members"""
         db_announcement = Announcement(
             gym_id=announcement.gym_id,
             user_id=announcement.user_id,
@@ -24,6 +28,41 @@ class AnnouncementService:
         self.session.add(db_announcement)
         self.session.commit()
         self.session.refresh(db_announcement)
+        if announcement.is_active:
+            try:
+                from app.utils.fcm_notification import send_fcm_notification_to_gym_members
+                
+                # Build data payload with dynamic route
+                notification_data = {
+                    "announcement_id": db_announcement.id,
+                    "type": "announcement",
+                    "gym_id": announcement.gym_id
+                }
+                
+                # Add route if provided, otherwise use default
+                route = getattr(announcement, 'route', None) or "/gym-details"
+                notification_data["route"] = route
+                
+                notification_results = send_fcm_notification_to_gym_members(
+                    gym_id=announcement.gym_id,
+                    title=announcement.title,
+                    body=announcement.message,
+                    data=notification_data,
+                    session=self.session
+                )
+                
+                # Log notification results
+                successful = sum(1 for r in notification_results if r.get("success", False))
+                total = len(notification_results)
+                logger.info(
+                    f"Announcement {db_announcement.id} created. "
+                    f"Notifications sent: {successful}/{total} members"
+                )
+            except Exception as e:
+                # Log error but don't fail announcement creation
+                logger.error(
+                    f"Failed to send FCM notifications for announcement {db_announcement.id}: {str(e)}"
+                )
         
         return AnnouncementResponse.model_validate(db_announcement.model_dump())
 
