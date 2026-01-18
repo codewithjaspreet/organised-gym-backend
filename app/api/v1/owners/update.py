@@ -10,12 +10,16 @@ from app.schemas.gym import GymResponse, GymUpdate
 from app.schemas.plan import PlanResponse, PlanUpdate
 from app.schemas.membership import MembershipResponse, MembershipUpdate
 from app.schemas.gym_rule import GymRuleResponse, GymRuleUpdate
+from app.schemas.payments import PaymentResponse
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
 from app.services.user_service import UserService
 from app.services.gym_service import GymService
 from app.services.plan_service import PlanService
 from app.services.membership_service import MembershipService
+from app.services.payment import PaymentService
+from app.models.payments import Payment
+from app.core.exceptions import NotFoundError
 
 router = APIRouter(prefix="/update", tags=["owners"])
 
@@ -223,4 +227,59 @@ def update_gym_rule(
     
     updated_rule = gym_service.update_gym_rule(rule_id, rule)
     return success_response(data=updated_rule, message="Gym rule updated successfully")
+
+
+@router.put("/payments/{payment_id}/approve", response_model=APIResponse[PaymentResponse], status_code=status.HTTP_200_OK)
+def approve_payment(
+    payment_id: str,
+    session: SessionDep = None,
+    current_user: User = require_admin
+):
+    """Approve a payment and send thank you notification to member"""
+    gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    
+    # Verify payment belongs to owner's gym
+    stmt = select(Payment).where(Payment.id == payment_id)
+    payment = session.exec(stmt).first()
+    
+    if not payment:
+        return failure_response(
+            message="Payment not found",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    
+    if payment.gym_id != gym.id:
+        return failure_response(
+            message="Payment does not belong to your gym",
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    if payment.status == "verified":
+        return failure_response(
+            message="Payment is already approved",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+    
+    payment_service = PaymentService(session=session)
+    try:
+        approved_payment = payment_service.approve_payment(
+            payment_id=payment_id,
+            verified_by=current_user.id
+        )
+        return success_response(data=approved_payment, message="Payment approved successfully")
+    except NotFoundError as e:
+        return failure_response(
+            message=str(e.detail) if hasattr(e, 'detail') else str(e),
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        return failure_response(
+            message=str(e),
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
 
