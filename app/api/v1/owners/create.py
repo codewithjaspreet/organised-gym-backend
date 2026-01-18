@@ -193,7 +193,7 @@ def create_notification(
     session: SessionDep = None,
     current_user: User = require_admin
 ):
-    """Create a new notification for a user in the owner's gym"""
+    """Create a new notification and send to gym members based on send_to filter"""
     gym = get_owner_gym(current_user, session)
     if not gym:
         return failure_response(
@@ -201,21 +201,16 @@ def create_notification(
             status_code=status.HTTP_404_NOT_FOUND
         )
     
-    from app.models.user import User as UserModel
-    user_stmt = select(UserModel).where(
-        UserModel.id == notification.user_id,
-        UserModel.gym_id == gym.id
-    )
-    user = session.exec(user_stmt).first()
-    if not user:
+    # Verify the gym_id matches the owner's gym
+    if notification.gym_id != gym.id:
         return failure_response(
-            message="User does not belong to your gym",
+            message="You can only send notifications to your own gym members",
             status_code=status.HTTP_403_FORBIDDEN
         )
     
     notification_service = NotificationService(session=session)
     notification_data = notification_service.create_notification(notification=notification)
-    return success_response(data=notification_data, message="Notification created successfully")
+    return success_response(data=notification_data, message="Notification created and sent successfully")
 
 
 @router.post("/rules", response_model=APIResponse[GymRuleResponse], status_code=status.HTTP_201_CREATED)

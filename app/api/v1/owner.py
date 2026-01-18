@@ -109,7 +109,7 @@ def create_notification(
     session: SessionDep = None,
     current_user: User = require_permission("user_get_all")  # Can create notifications if they can see users
 ):
-    """Create notification"""
+    """Create notification and send to gym members based on send_to filter"""
     gym = get_owner_gym(current_user, session)
     if not gym:
         return failure_response(
@@ -117,22 +117,25 @@ def create_notification(
             status_code=status.HTTP_404_NOT_FOUND
         )
     
-    # Verify the user belongs to the gym
-    from app.models.user import User as UserModel
-    user_stmt = select(UserModel).where(
-        UserModel.id == notification.user_id,
-        UserModel.gym_id == gym.id
-    )
-    user = session.exec(user_stmt).first()
-    if not user:
+    # Verify the gym_id matches the owner's gym
+    if notification.gym_id != gym.id:
         return failure_response(
-            message="User does not belong to your gym",
+            message="You can only send notifications to your own gym members",
             status_code=status.HTTP_403_FORBIDDEN
         )
     
     notification_service = NotificationService(session=session)
     notification_data = notification_service.create_notification(notification=notification)
-    return success_response(data=notification_data, message="Notification created successfully")
+    
+    # Customize message based on notification status
+    if notification_data.status == "no_recipients":
+        message = f"Notification created but no recipients found for filter: {notification.send_to.value}"
+    elif notification_data.status == "error":
+        message = "Notification created but failed to send. Please check logs for details."
+    else:
+        message = "Notification created and sent successfully"
+    
+    return success_response(data=notification_data, message=message)
 
 
 @router.get("/notifications", response_model=APIResponse[NotificationListResponse])

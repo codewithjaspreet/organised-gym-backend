@@ -240,3 +240,168 @@ def send_fcm_notification_to_gym_members(
         return []
     
     return send_fcm_notification_to_multiple(device_tokens, title, body, data)
+
+
+def send_fcm_notification_to_gym_members_by_filter(
+    gym_id: str,
+    title: str,
+    body: str,
+    send_to: str,
+    data: Optional[dict] = None,
+    session = None
+) -> list[dict]:
+    """
+    Send FCM notification to gym members based on send_to filter.
+    
+    Args:
+        gym_id: Gym ID
+        title: Notification title
+        body: Notification body/message
+        send_to: Filter type - "All", "Pending Fees", "Birthday", "Plan Expiring Today", "Plan Expiring in 3 days"
+        data: Optional additional data payload
+        session: Database session (required)
+        
+    Returns:
+        list[dict]: List of results for each member with user_id included
+    """
+    if not session:
+        raise ValueError("Database session is required")
+    
+    from sqlmodel import select, and_, or_, func
+    from datetime import date, timedelta
+    from app.models.user import User
+    from app.models.role import Role as RoleModel
+    from app.models.membership import Membership
+    from app.models.billing import Payment
+    
+    # Get MEMBER role
+    member_role_stmt = select(RoleModel).where(RoleModel.name == "MEMBER")
+    member_role = session.exec(member_role_stmt).first()
+    
+    if not member_role:
+        return []
+    
+    # Base query for active members with device tokens
+    base_conditions = [
+        User.gym_id == gym_id,
+        User.role_id == member_role.id,
+        User.device_token.isnot(None),
+        User.is_active == True
+    ]
+    
+    # Apply filter based on send_to parameter
+    if send_to == "All":
+        # Get all members
+        stmt = select(User).where(and_(*base_conditions))
+        members = session.exec(stmt).all()
+        
+    elif send_to == "Pending Fees":
+        # Get users with pending payments
+        today = date.today()
+        pending_user_ids_subquery = select(func.distinct(Payment.user_id)).where(
+            and_(
+                Payment.gym_id == gym_id,
+                Payment.status == "pending"
+            )
+        )
+        pending_user_ids = [uid for uid in session.exec(pending_user_ids_subquery).all()]
+        
+        if not pending_user_ids:
+            return []
+        
+        stmt = select(User).where(
+            and_(
+                *base_conditions,
+                User.id.in_(pending_user_ids)
+            )
+        )
+        members = session.exec(stmt).all()
+        
+    elif send_to == "Birthday":
+        # Get users whose birthday is today
+        # Fetch all members and filter by birthday in Python for cross-database compatibility
+        today = date.today()
+        all_members_stmt = select(User).where(and_(*base_conditions))
+        all_members = session.exec(all_members_stmt).all()
+        members = [
+            member for member in all_members
+            if member.dob and member.dob.month == today.month and member.dob.day == today.day
+        ]
+        
+    elif send_to == "Plan Expiring Today":
+        # Get users whose membership expires today and is still active
+        today = date.today()
+        expiring_user_ids_subquery = select(Membership.user_id).where(
+            and_(
+                Membership.gym_id == gym_id,
+                Membership.end_date == today,
+                Membership.status == "active",
+                Membership.end_date >= today  # Still valid today
+            )
+        )
+        expiring_user_ids = [uid for uid in session.exec(expiring_user_ids_subquery).all()]
+        
+        if not expiring_user_ids:
+            return []
+        
+        stmt = select(User).where(
+            and_(
+                *base_conditions,
+                User.id.in_(expiring_user_ids)
+            )
+        )
+        members = session.exec(stmt).all()
+        
+    elif send_to == "Plan Expiring in 3 days":
+        # Get users whose membership expires in 3 days and is still active
+        today = date.today()
+        three_days_later = today + timedelta(days=3)
+        expiring_user_ids_subquery = select(Membership.user_id).where(
+            and_(
+                Membership.gym_id == gym_id,
+                Membership.end_date == three_days_later,
+                Membership.status == "active",
+                Membership.end_date >= today  # Still valid
+            )
+        )
+        expiring_user_ids = [uid for uid in session.exec(expiring_user_ids_subquery).all()]
+        
+        if not expiring_user_ids:
+            return []
+        
+        stmt = select(User).where(
+            and_(
+                *base_conditions,
+                User.id.in_(expiring_user_ids)
+            )
+        )
+        members = session.exec(stmt).all()
+        
+    else:
+        # Invalid send_to value, return empty
+        return []
+    
+    if not members:
+        return []
+    
+    # Send notifications and include user_id in results
+    results = []
+    for member in members:
+        if member.device_token:
+            try:
+                result = send_fcm_notification(member.device_token, title, body, data)
+                results.append({
+                    "user_id": member.id,
+                    "device_token": member.device_token,
+                    "success": True,
+                    "response": result
+                })
+            except Exception as e:
+                results.append({
+                    "user_id": member.id,
+                    "device_token": member.device_token,
+                    "success": False,
+                    "error": str(e)
+                })
+    
+    return results
