@@ -88,25 +88,25 @@ class NotificationService:
         limit: Optional[int] = None,
         offset: int = 0
     ) -> NotificationListResponse:
-        """Get notifications for all users in a gym"""
-        from app.models.user import User
+        """Get gym-level notifications (notifications are saved with gym owner's user_id)"""
+        from app.models.gym import Gym
         
-        # Get all user IDs in the gym
-        user_stmt = select(User.id).where(User.gym_id == gym_id)
-        user_ids_result = self.session.exec(user_stmt).all()
-        user_ids = [user_id for user_id in user_ids_result] if user_ids_result else []
+        # Get gym owner's user_id (notifications are saved with owner_id as placeholder)
+        gym_stmt = select(Gym).where(Gym.id == gym_id)
+        gym = self.session.exec(gym_stmt).first()
         
-        if not user_ids:
+        if not gym:
             return NotificationListResponse(notifications=[], total=0)
         
-        stmt = select(Notification).where(Notification.user_id.in_(user_ids))
+        # Get notifications saved with gym owner's user_id (these are gym-level notifications)
+        stmt = select(Notification).where(Notification.user_id == gym.owner_id)
         stmt = stmt.order_by(Notification.sent_at.desc())
         
         if limit:
             stmt = stmt.limit(limit).offset(offset)
         
         notifications = self.session.exec(stmt).all()
-        total = len(list(self.session.exec(select(Notification).where(Notification.user_id.in_(user_ids)))))
+        total = len(list(self.session.exec(select(Notification).where(Notification.user_id == gym.owner_id))))
         
         notification_responses = [NotificationResponse.model_validate(n.model_dump()) for n in notifications]
         

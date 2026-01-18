@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from app.models.user import User
     from app.models.announcement import Announcement
     from app.models.gym_rule import GymRule
+    from app.models.bank_account import BankAccount
 
 
 class Gym(SQLModel, table=True):
@@ -113,4 +114,5 @@ class Gym(SQLModel, table=True):
     plans: List["Plan"] = Relationship(back_populates="gym")
     gym_subscriptions: List["GymSubscription"] = Relationship(back_populates="gym")
     rules: List["GymRule"] = Relationship(back_populates="gym")
+    bank_accounts: List["BankAccount"] = Relationship(back_populates="gym")
 

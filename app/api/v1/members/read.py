@@ -1,4 +1,5 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, status, Query
+from typing import Optional
 from sqlmodel import select
 from app.core.permissions import require_any_authenticated
 from app.db.db import SessionDep
@@ -13,8 +14,10 @@ from app.schemas.plan import PlanResponse, PlanListResponse
 from app.schemas.gym_rule import GymRuleResponse, GymRuleListResponse
 from app.schemas.attendance import ActiveCheckInStatusResponse
 from app.schemas.announcement import AnnouncementResponse, AnnouncementListResponse
+from app.schemas.notification import NotificationListResponse
 from app.services.attendance_service import AttendanceService
 from app.services.announcement_service import AnnouncementService
+from app.services.notification_service import NotificationService
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
 from app.services.user_service import UserService
@@ -296,4 +299,40 @@ def get_announcements(
     announcements = announcement_service.get_announcements_by_gym(gym_id=current_user.gym_id)
     announcements_data = AnnouncementListResponse(announcements=announcements)
     return success_response(data=announcements_data, message="Announcements fetched successfully")
+
+
+@router.get("/notifications", response_model=APIResponse[NotificationListResponse], status_code=status.HTTP_200_OK)
+def get_notifications(
+    limit: Optional[int] = Query(100, description="Limit number of results"),
+    offset: int = Query(0, description="Offset for pagination"),
+    session: SessionDep = None,
+    current_user: User = require_any_authenticated
+):
+    """Get all notifications for the member's gym"""
+    # Get role name from database
+    stmt = select(RoleModel).where(RoleModel.id == current_user.role_id)
+    role = session.exec(stmt).first()
+    
+    if not role or role.name != "MEMBER":
+        return failure_response(
+            message="Only members can access this endpoint",
+            data=None,
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    # Check if member has a gym assigned
+    if not current_user.gym_id:
+        return failure_response(
+            message="No gym assigned to this member",
+            data=None,
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    
+    notification_service = NotificationService(session=session)
+    notifications_data = notification_service.get_notifications_by_gym(
+        gym_id=current_user.gym_id,
+        limit=limit,
+        offset=offset
+    )
+    return success_response(data=notifications_data, message="Notifications fetched successfully")
 

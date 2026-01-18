@@ -21,7 +21,8 @@ class BankAccountUpdate(BaseModel):
 
 class BankAccountResponse(BaseModel):
     id: str
-    user_id: str
+    gym_id: str
+    user_id: Optional[str] = None
     account_holder_name: str
     bank_name: str
     account_number: str
