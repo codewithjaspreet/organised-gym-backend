@@ -16,19 +16,51 @@ class NotificationService:
         self.session = session
 
     def create_notification(self, notification: NotificationCreate) -> NotificationResponse:
-        """Create a new notification"""
+        """Create notification, apply filter, send FCM, and save single gym-level record"""
+        from app.utils.fcm_notification import send_fcm_notification_to_gym_members_by_filter
+        from app.models.gym import Gym
+        
+        # Get gym owner_id for the notification record
+        gym_stmt = select(Gym).where(Gym.id == notification.gym_id)
+        gym = self.session.exec(gym_stmt).first()
+        if not gym:
+            raise NotFoundError(detail=f"Gym with id {notification.gym_id} not found")
+        
+        # Prepare notification data
+        notification_data = {
+            "type": "notification",
+            "gym_id": notification.gym_id,
+            "screen": notification.screen or "/notifications"
+        }
+        
+        # Get filtered users and send notifications
+        notification_results = send_fcm_notification_to_gym_members_by_filter(
+            gym_id=notification.gym_id,
+            title=notification.title,
+            body=notification.message,
+            send_to=notification.send_to.value,
+            data=notification_data,
+            session=self.session
+        )
+        
+        # Calculate success status
+        successful_count = sum(1 for r in notification_results if r.get("success", False))
+        total_count = len(notification_results)
+        status = "sent" if successful_count > 0 else "failed" if total_count > 0 else "no_recipients"
+        
+        # Save single gym-level notification record
         db_notification = Notification(
-            user_id=notification.user_id,
-            type="general",  # Default type, can be customized
+            user_id=gym.owner_id,  # Use gym owner as placeholder for gym-level notification
+            type=notification.send_to.value.lower().replace(" ", "_"),
             title=notification.title,
             message=notification.message,
-            status="pending"  # Default status
+            status=status
         )
         self.session.add(db_notification)
         self.session.commit()
         self.session.refresh(db_notification)
         
-        return NotificationResponse.model_validate(db_notification)
+        return NotificationResponse.model_validate(db_notification.model_dump())
 
     def get_notifications_by_user(
         self,
@@ -46,7 +78,7 @@ class NotificationService:
         notifications = self.session.exec(stmt).all()
         total = len(list(self.session.exec(select(Notification).where(Notification.user_id == user_id))))
         
-        notification_responses = [NotificationResponse.model_validate(n) for n in notifications]
+        notification_responses = [NotificationResponse.model_validate(n.model_dump()) for n in notifications]
         
         return NotificationListResponse(notifications=notification_responses, total=total)
 
@@ -76,7 +108,7 @@ class NotificationService:
         notifications = self.session.exec(stmt).all()
         total = len(list(self.session.exec(select(Notification).where(Notification.user_id.in_(user_ids)))))
         
-        notification_responses = [NotificationResponse.model_validate(n) for n in notifications]
+        notification_responses = [NotificationResponse.model_validate(n.model_dump()) for n in notifications]
         
         return NotificationListResponse(notifications=notification_responses, total=total)
 
@@ -87,4 +119,4 @@ class NotificationService:
         if not notification:
             raise NotFoundError(detail=f"Notification with id {notification_id} not found")
         
-        return NotificationResponse.model_validate(notification)
+        return NotificationResponse.model_validate(notification.model_dump())
