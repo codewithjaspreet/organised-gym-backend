@@ -4,7 +4,7 @@ from sqlmodel import select
 from app.core.exceptions import NotFoundError
 from app.db.db import SessionDep
 from app.models.bank_account import BankAccount
-from app.models.user import User
+from app.models.gym import Gym
 from app.schemas.bank_account import (
     BankAccountCreate,
     BankAccountUpdate,
@@ -20,18 +20,18 @@ class BankAccountService:
 
     def create_bank_account(
         self,
-        user_id: str,
+        gym_id: str,
         bank_account: BankAccountCreate
     ) -> BankAccountResponse:
-        """Create a new bank account for a user"""
-        # Verify user exists
-        stmt = select(User).where(User.id == user_id)
-        user = self.session.exec(stmt).first()
-        if not user:
-            raise NotFoundError(detail=f"User with id {user_id} not found")
+        """Create a new bank account for a gym"""
+        # Verify gym exists
+        stmt = select(Gym).where(Gym.id == gym_id)
+        gym = self.session.exec(stmt).first()
+        if not gym:
+            raise NotFoundError(detail=f"Gym with id {gym_id} not found")
 
         db_bank_account = BankAccount(
-            user_id=user_id,
+            gym_id=gym_id,
             account_holder_name=bank_account.account_holder_name,
             bank_name=bank_account.bank_name,
             account_number=bank_account.account_number,
@@ -55,15 +55,15 @@ class BankAccountService:
 
         return BankAccountResponse.model_validate(bank_account.model_dump())
 
-    def get_user_bank_accounts(self, user_id: str) -> BankAccountListResponse:
-        """Get all bank accounts for a user"""
-        # Verify user exists
-        stmt = select(User).where(User.id == user_id)
-        user = self.session.exec(stmt).first()
-        if not user:
-            raise NotFoundError(detail=f"User with id {user_id} not found")
+    def get_gym_bank_accounts(self, gym_id: str) -> BankAccountListResponse:
+        """Get all bank accounts for a gym"""
+        # Verify gym exists
+        stmt = select(Gym).where(Gym.id == gym_id)
+        gym = self.session.exec(stmt).first()
+        if not gym:
+            raise NotFoundError(detail=f"Gym with id {gym_id} not found")
 
-        stmt = select(BankAccount).where(BankAccount.user_id == user_id).order_by(BankAccount.created_at.desc())
+        stmt = select(BankAccount).where(BankAccount.gym_id == gym_id).order_by(BankAccount.created_at.desc())
         bank_accounts = self.session.exec(stmt).all()
 
         bank_account_responses = [

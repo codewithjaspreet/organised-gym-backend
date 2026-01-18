@@ -5,6 +5,7 @@ from uuid import uuid4
 
 if TYPE_CHECKING:
     from app.models.user import User
+    from app.models.gym import Gym
 
 
 class BankAccount(SQLModel, table=True):
@@ -15,10 +16,16 @@ class BankAccount(SQLModel, table=True):
         primary_key=True,
         default_factory=lambda: str(uuid4())
     )
-    user_id: str = Field(
-        description="The user id",
-        foreign_key="users.id",
+    gym_id: str = Field(
+        description="The gym id",
+        foreign_key="gyms.id",
         index=True
+    )
+    user_id: Optional[str] = Field(
+        description="The user id (optional, for future user-level accounts)",
+        foreign_key="users.id",
+        nullable=True,
+        default=None
     )
     account_holder_name: str = Field(
         description="The account holder's name",
@@ -50,4 +57,5 @@ class BankAccount(SQLModel, table=True):
     )
     
     # Relationships
+    gym: Optional["Gym"] = Relationship(back_populates="bank_accounts")
     user: Optional["User"] = Relationship(back_populates="bank_accounts")
