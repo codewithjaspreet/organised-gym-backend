@@ -10,7 +10,6 @@ from app.schemas.gym import GymCreate, GymResponse
 from app.schemas.plan import PlanCreate, PlanResponse
 from app.schemas.membership import MembershipCreate, MembershipResponse
 from app.schemas.announcement import AnnouncementCreate, AnnouncementResponse
-from app.schemas.notification import NotificationCreate, NotificationResponse
 from app.schemas.gym_rule import GymRuleCreate, GymRuleResponse
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
@@ -19,7 +18,6 @@ from app.services.gym_service import GymService
 from app.services.plan_service import PlanService
 from app.services.membership_service import MembershipService
 from app.services.announcement_service import AnnouncementService
-from app.services.notification_service import NotificationService
 
 router = APIRouter(prefix="/create", tags=["owners"])
 
@@ -187,30 +185,6 @@ def create_announcement(
     return success_response(data=announcement_data, message="Announcement created successfully")
 
 
-@router.post("/notifications", response_model=APIResponse[NotificationResponse], status_code=status.HTTP_201_CREATED)
-def create_notification(
-    notification: NotificationCreate,
-    session: SessionDep = None,
-    current_user: User = require_admin
-):
-    """Create a new notification and send to gym members based on send_to filter"""
-    gym = get_owner_gym(current_user, session)
-    if not gym:
-        return failure_response(
-            message="No gym found for this owner",
-            status_code=status.HTTP_404_NOT_FOUND
-        )
-    
-    # Verify the gym_id matches the owner's gym
-    if notification.gym_id != gym.id:
-        return failure_response(
-            message="You can only send notifications to your own gym members",
-            status_code=status.HTTP_403_FORBIDDEN
-        )
-    
-    notification_service = NotificationService(session=session)
-    notification_data = notification_service.create_notification(notification=notification)
-    return success_response(data=notification_data, message="Notification created and sent successfully")
 
 
 @router.post("/rules", response_model=APIResponse[GymRuleResponse], status_code=status.HTTP_201_CREATED)

@@ -7,10 +7,9 @@ from uuid import uuid4
 
 if TYPE_CHECKING:
     from app.models.attendance import Attendance
-    from app.models.billing import Payment
+    from app.models.payments import Payment
     from app.models.gym import Gym
     from app.models.membership import Membership
-    from app.models.notification import Notification
     from app.models.announcement import Announcement
     from app.models.role import Role
     from app.models.plan import Plan
@@ -117,7 +116,6 @@ class User(SQLModel, table=True):
         sa_relationship_kwargs={"foreign_keys": "[Gym.owner_id]"}
     )
     attendances: List["Attendance"] = Relationship(back_populates="user")
-    notifications: List["Notification"] = Relationship(back_populates="user")
     payments: List["Payment"] = Relationship(
         back_populates="user",
         sa_relationship_kwargs={"foreign_keys": "[Payment.user_id]"}

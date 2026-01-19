@@ -1,6 +1,15 @@
 from datetime import datetime
 from typing import List, Optional, Dict, Any
+from enum import Enum
 from pydantic import BaseModel, Field
+
+
+class SendToType(str, Enum):
+    ALL = "All"
+    PENDING_FEES = "Pending Fees"
+    BIRTHDAY = "Birthday"
+    PLAN_EXPIRING_TODAY = "Plan Expiring Today"
+    PLAN_EXPIRING_IN_3_DAYS = "Plan Expiring in 3 days"
 
 
 class AnnouncementData(BaseModel):
@@ -13,6 +22,7 @@ class AnnouncementCreate(BaseModel):
     is_active: bool = Field(description="Whether the announcement is active", default=True)
     user_id: str = Field(description="The user id")
     gym_id: str = Field(description="The gym id")
+    send_to: SendToType = Field(description="Who to send the announcement to", default=SendToType.ALL)
     data: Optional[AnnouncementData] = Field(default=None, description="Data object containing route for deep linking")
 
 

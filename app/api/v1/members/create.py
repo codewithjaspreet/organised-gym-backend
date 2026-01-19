@@ -6,13 +6,14 @@ from app.db.db import SessionDep
 from app.models.user import User
 from app.models.role import Role as RoleModel
 from app.schemas.membership import MembershipCreate, MembershipResponse
-from app.schemas.billing import PaymentCreate, PaymentResponse
+from app.schemas.payments import MemberPaymentCreate, PaymentResponse as PaymentResponseSchema
 from app.schemas.attendance import MarkAttendanceRequest, MarkAttendanceResponse, CheckoutRequest, CheckoutResponse
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
 from app.services.membership_service import MembershipService
-from app.services.billing_service import BillingService
+from app.services.payment import PaymentService
 from app.services.attendance_service import AttendanceService
+from app.core.exceptions import NotFoundError
 
 router = APIRouter(prefix="/create", tags=["members"])
 
@@ -45,32 +46,51 @@ def create_membership(
     return success_response(data=membership_data, message="Membership created successfully")
 
 
-@router.post("/payments", response_model=APIResponse[PaymentResponse], status_code=status.HTTP_201_CREATED)
+@router.post("/payments", response_model=APIResponse[PaymentResponseSchema], status_code=status.HTTP_201_CREATED)
 def create_payment(
-    payment: PaymentCreate,
+    payment: MemberPaymentCreate,
     session: SessionDep = None,
     current_user: User = require_any_authenticated
 ):
-    """Create a payment for the current member"""
+    """Create a payment for the current member's plan"""
     # Get role name from database
     stmt = select(RoleModel).where(RoleModel.id == current_user.role_id)
     role = session.exec(stmt).first()
     
     if not role or role.name != "MEMBER":
         return failure_response(
-            message="Only members can create payments for themselves",
-            data=None
+            message="Only members can create payments",
+            data=None,
+            status_code=status.HTTP_403_FORBIDDEN
         )
     
-    if payment.user_id != current_user.id:
+    # Check if member has a gym assigned
+    if not current_user.gym_id:
         return failure_response(
-            message="You can only create payments for yourself",
-            data=None
+            message="No gym assigned to this member",
+            data=None,
+            status_code=status.HTTP_404_NOT_FOUND
         )
     
-    billing_service = BillingService(session=session)
-    payment_data = billing_service.create_payment(payment)
-    return success_response(data=payment_data, message="Payment created successfully")
+    payment_service = PaymentService(session=session)
+    try:
+        payment_data = payment_service.create_member_payment(
+            user_id=current_user.id,
+            payment_data=payment
+        )
+        return success_response(data=payment_data, message="Payment created successfully")
+    except NotFoundError as e:
+        return failure_response(
+            message=str(e.detail) if hasattr(e, 'detail') else str(e),
+            data=None,
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        return failure_response(
+            message=str(e),
+            data=None,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
 
 
 @router.post("/attendance", response_model=APIResponse[MarkAttendanceResponse], status_code=status.HTTP_201_CREATED)

@@ -7,22 +7,20 @@ from app.models.user import User, Role, RoleEnum
 from app.models.role import Role as RoleModel
 from app.schemas.user import UserResponse
 from app.schemas.membership import MembershipResponse
-from app.schemas.billing import PaymentResponse
+from app.schemas.payments import PaymentResponse
 from app.schemas.dashboard import DashboardKPIsResponse
 from app.schemas.gym import GymResponse
 from app.schemas.plan import PlanResponse, PlanListResponse
 from app.schemas.gym_rule import GymRuleResponse, GymRuleListResponse
 from app.schemas.attendance import ActiveCheckInStatusResponse
 from app.schemas.announcement import AnnouncementResponse, AnnouncementListResponse
-from app.schemas.notification import NotificationListResponse
 from app.services.attendance_service import AttendanceService
 from app.services.announcement_service import AnnouncementService
-from app.services.notification_service import NotificationService
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
 from app.services.user_service import UserService
 from app.services.membership_service import MembershipService
-from app.services.billing_service import BillingService
+from app.services.payment import PaymentService
 from app.services.dashboard_service import DashboardService
 from app.services.gym_service import GymService
 from app.services.plan_service import PlanService
@@ -118,8 +116,8 @@ def get_payment(
             data=None
         )
     
-    billing_service = BillingService(session=session)
-    payment = billing_service.get_payment(payment_id)
+    payment_service = PaymentService(session=session)
+    payment = payment_service.get_payment(payment_id)
     
     if payment.user_id != current_user.id:
         return failure_response(
@@ -301,38 +299,4 @@ def get_announcements(
     return success_response(data=announcements_data, message="Announcements fetched successfully")
 
 
-@router.get("/notifications", response_model=APIResponse[NotificationListResponse], status_code=status.HTTP_200_OK)
-def get_notifications(
-    limit: Optional[int] = Query(100, description="Limit number of results"),
-    offset: int = Query(0, description="Offset for pagination"),
-    session: SessionDep = None,
-    current_user: User = require_any_authenticated
-):
-    """Get all notifications for the member's gym"""
-    # Get role name from database
-    stmt = select(RoleModel).where(RoleModel.id == current_user.role_id)
-    role = session.exec(stmt).first()
-    
-    if not role or role.name != "MEMBER":
-        return failure_response(
-            message="Only members can access this endpoint",
-            data=None,
-            status_code=status.HTTP_403_FORBIDDEN
-        )
-    
-    # Check if member has a gym assigned
-    if not current_user.gym_id:
-        return failure_response(
-            message="No gym assigned to this member",
-            data=None,
-            status_code=status.HTTP_404_NOT_FOUND
-        )
-    
-    notification_service = NotificationService(session=session)
-    notifications_data = notification_service.get_notifications_by_gym(
-        gym_id=current_user.gym_id,
-        limit=limit,
-        offset=offset
-    )
-    return success_response(data=notifications_data, message="Notifications fetched successfully")
 

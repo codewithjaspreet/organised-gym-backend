@@ -12,7 +12,6 @@ from app.schemas.plan import PlanResponse, PlanListResponse
 from app.schemas.gym_rule import GymRuleResponse, GymRuleListResponse
 from app.schemas.membership import MembershipResponse
 from app.schemas.announcement import AnnouncementResponse, AnnouncementListResponse
-from app.schemas.notification import NotificationResponse, NotificationListResponse
 from app.schemas.dashboard import DashboardKPIsResponse
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
@@ -22,7 +21,6 @@ from app.services.gym_service import GymService
 from app.services.plan_service import PlanService
 from app.services.membership_service import MembershipService
 from app.services.announcement_service import AnnouncementService
-from app.services.notification_service import NotificationService
 from app.services.dashboard_service import DashboardService
 from app.services.attendance_service import AttendanceService
 from app.schemas.attendance import DailyAttendanceResponse

@@ -32,3 +32,9 @@ class PaymentResponse(BaseModel):
     verified_by: Optional[str] = None
     created_at: datetime
 
+
+class MemberPaymentCreate(BaseModel):
+    plan_id: str = Field(description="The plan id")
+    proof_url: str = Field(description="The payment proof/screenshot URL")
+    remarks: Optional[str] = Field(default=None, description="Payment remarks/notes", nullable=True)
+
