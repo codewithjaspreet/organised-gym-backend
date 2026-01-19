@@ -17,7 +17,9 @@ class AnnouncementService:
         self.session = session
 
     def create_announcement(self, announcement: AnnouncementCreate) -> AnnouncementResponse:
-        """Create a new announcement and send FCM notifications to gym members"""
+        """Create a new announcement and send FCM notifications to gym members based on send_to filter"""
+        from app.utils.fcm_notification import send_fcm_notification_to_gym_members_by_filter
+        
         db_announcement = Announcement(
             gym_id=announcement.gym_id,
             user_id=announcement.user_id,
@@ -28,10 +30,9 @@ class AnnouncementService:
         self.session.add(db_announcement)
         self.session.commit()
         self.session.refresh(db_announcement)
+        
         if announcement.is_active:
             try:
-                from app.utils.fcm_notification import send_fcm_notification_to_gym_members
-                
                 # Build data payload with dynamic route from data object
                 notification_data = {
                     "announcement_id": db_announcement.id,
@@ -47,10 +48,12 @@ class AnnouncementService:
                 # Map route to 'screen' in FCM notification data
                 notification_data["screen"] = route
                 
-                notification_results = send_fcm_notification_to_gym_members(
+                # Send notifications based on send_to filter
+                notification_results = send_fcm_notification_to_gym_members_by_filter(
                     gym_id=announcement.gym_id,
                     title=announcement.title,
                     body=announcement.message,
+                    send_to=announcement.send_to.value,
                     data=notification_data,
                     session=self.session
                 )
@@ -59,7 +62,7 @@ class AnnouncementService:
                 successful = sum(1 for r in notification_results if r.get("success", False))
                 total = len(notification_results)
                 logger.info(
-                    f"Announcement {db_announcement.id} created. "
+                    f"Announcement {db_announcement.id} created with send_to='{announcement.send_to.value}'. "
                     f"Notifications sent: {successful}/{total} members"
                 )
             except Exception as e:

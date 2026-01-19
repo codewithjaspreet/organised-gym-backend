@@ -8,13 +8,11 @@ from app.models.user import User
 from app.models.gym import Gym
 from app.models.role import Role
 from app.schemas.announcement import AnnouncementCreate, AnnouncementResponse, AnnouncementListResponse
-from app.schemas.notification import NotificationCreate, NotificationResponse, NotificationListResponse
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
 from app.schemas.dashboard import DashboardKPIsResponse
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
 from app.services.announcement_service import AnnouncementService
-from app.services.notification_service import NotificationService
 from app.services.user_service import UserService
 from app.services.dashboard_service import DashboardService
 
@@ -102,63 +100,6 @@ def get_announcements(
     return success_response(data=announcements_data, message="Announcements fetched successfully")
 
 
-# Notifications Endpoints
-@router.post("/notifications", response_model=APIResponse[NotificationResponse], status_code=status.HTTP_201_CREATED)
-def create_notification(
-    notification: NotificationCreate,
-    session: SessionDep = None,
-    current_user: User = require_permission("user_get_all")  # Can create notifications if they can see users
-):
-    """Create notification and send to gym members based on send_to filter"""
-    gym = get_owner_gym(current_user, session)
-    if not gym:
-        return failure_response(
-            message="No gym found for this owner",
-            status_code=status.HTTP_404_NOT_FOUND
-        )
-    
-    # Verify the gym_id matches the owner's gym
-    if notification.gym_id != gym.id:
-        return failure_response(
-            message="You can only send notifications to your own gym members",
-            status_code=status.HTTP_403_FORBIDDEN
-        )
-    
-    notification_service = NotificationService(session=session)
-    notification_data = notification_service.create_notification(notification=notification)
-    
-    # Customize message based on notification status
-    if notification_data.status == "no_recipients":
-        message = f"Notification created but no recipients found for filter: {notification.send_to.value}"
-    elif notification_data.status == "error":
-        message = "Notification created but failed to send. Please check logs for details."
-    else:
-        message = "Notification created and sent successfully"
-    
-    return success_response(data=notification_data, message=message)
-
-
-@router.get("/notifications", response_model=APIResponse[NotificationListResponse])
-def get_notifications(
-    limit: Optional[int] = Query(100, description="Limit number of results"),
-    offset: int = Query(0, description="Offset for pagination"),
-    session: SessionDep = None,
-    current_user: User = require_permission("gym_get_own")
-):
-    """Get notifications"""
-    gym = get_owner_gym(current_user, session)
-    if not gym:
-        return failure_response(
-            message="No gym found for this owner",
-            status_code=status.HTTP_404_NOT_FOUND
-        )
-    notification_service = NotificationService(session=session)
-    notifications_data = notification_service.get_notifications_by_gym(
-        gym_id=gym.id,
-        limit=limit,
-        offset=offset
-    )
-    return success_response(data=notifications_data, message="Notifications fetched successfully")
 
 
 # Member Management

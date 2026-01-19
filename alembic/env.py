@@ -19,9 +19,8 @@ from app.models.permission import Permission
 from app.models.role_permission import RolePermission
 from app.models.membership import Membership
 from app.models.plan import Plan
-from app.models.billing import Payment
+from app.models.payments import Payment
 from app.models.attendance import Attendance
-from app.models.notification import Notification
 from app.models.announcement import Announcement
 from app.models.og_plan import OGPlan
 from app.models.gym_subscription import GymSubscription

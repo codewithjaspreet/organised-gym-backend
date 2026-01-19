@@ -117,11 +117,10 @@ class PaymentService:
         self.session.commit()
         self.session.refresh(db_payment)
 
-        # Send notification to gym owner
+        # Send FCM notification to gym owner
         try:
             from app.utils.fcm_notification import send_fcm_notification_to_user
             from app.models.gym import Gym
-            from app.models.notification import Notification
             
             # Get gym owner
             gym_stmt = select(Gym).where(Gym.id == user.gym_id)
@@ -139,28 +138,13 @@ class PaymentService:
                 }
                 
                 # Send FCM notification
-                try:
-                    send_fcm_notification_to_user(
-                        user_id=gym.owner_id,
-                        title=notification_title,
-                        body=notification_message,
-                        data=notification_data,
-                        session=self.session
-                    )
-                    notification_status = "sent"
-                except Exception:
-                    notification_status = "failed"
-                
-                # Save notification record
-                db_notification = Notification(
+                send_fcm_notification_to_user(
                     user_id=gym.owner_id,
-                    type="payment",
                     title=notification_title,
-                    message=notification_message,
-                    status=notification_status
+                    body=notification_message,
+                    data=notification_data,
+                    session=self.session
                 )
-                self.session.add(db_notification)
-                self.session.commit()
         except Exception as e:
             # Log error but don't fail payment creation
             import logging
@@ -187,10 +171,9 @@ class PaymentService:
         self.session.commit()
         self.session.refresh(payment)
 
-        # Send thank you notification to member
+        # Send thank you FCM notification to member
         try:
             from app.utils.fcm_notification import send_fcm_notification_to_user
-            from app.models.notification import Notification
             
             notification_title = "Payment Verified"
             notification_message = f"Thank you! Your payment of ₹{payment.amount} has been verified successfully."
@@ -203,28 +186,13 @@ class PaymentService:
             }
             
             # Send FCM notification
-            try:
-                send_fcm_notification_to_user(
-                    user_id=payment.user_id,
-                    title=notification_title,
-                    body=notification_message,
-                    data=notification_data,
-                    session=self.session
-                )
-                notification_status = "sent"
-            except Exception:
-                notification_status = "failed"
-            
-            # Save notification record
-            db_notification = Notification(
+            send_fcm_notification_to_user(
                 user_id=payment.user_id,
-                type="payment_verified",
                 title=notification_title,
-                message=notification_message,
-                status=notification_status
+                body=notification_message,
+                data=notification_data,
+                session=self.session
             )
-            self.session.add(db_notification)
-            self.session.commit()
         except Exception as e:
             # Log error but don't fail payment approval
             import logging
