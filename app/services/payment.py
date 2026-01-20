@@ -1,12 +1,18 @@
-from sqlmodel import select, and_
-from datetime import date
+from sqlmodel import select, and_, func
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
+from typing import List
 from app.core.exceptions import NotFoundError
 from app.db.db import SessionDep
 from app.models.payments import Payment
 from app.models.membership import Membership
 from app.models.plan import Plan
 from app.models.gym import Gym
-from app.schemas.payments import PaymentCreate, PaymentResponse, PaymentUpdate, MemberPaymentCreate, PaymentStatusUpdate, PaymentStatusType
+from app.schemas.payments import (
+    PaymentCreate, PaymentResponse, PaymentUpdate, MemberPaymentCreate, 
+    PaymentStatusUpdate, PaymentStatusType, PendingPaymentResponse, PendingPaymentListResponse
+)
+from app.schemas.user import CurrentPlanResponse
 
 
 class PaymentService:
@@ -212,4 +218,128 @@ class PaymentService:
             logger.error(f"Failed to send payment status notification to member: {str(e)}")
 
         return PaymentResponse.model_validate(payment.model_dump())
+
+    def get_pending_payments(
+        self,
+        gym_id: str,
+        page: int = 1,
+        page_size: int = 20
+    ) -> PendingPaymentListResponse:
+        """
+        Get all pending payments for a gym with pagination.
+        Returns payment details with member's current plan information.
+        """
+        from app.models.user import User
+        
+        # Base query: all pending payments for the gym
+        stmt = select(Payment).where(
+            and_(
+                Payment.gym_id == gym_id,
+                Payment.status == "pending"
+            )
+        ).order_by(Payment.created_at.desc())
+        
+        # Get total count
+        count_stmt = select(func.count(Payment.id)).where(
+            and_(
+                Payment.gym_id == gym_id,
+                Payment.status == "pending"
+            )
+        )
+        total = self.session.exec(count_stmt).first() or 0
+        
+        # Apply pagination
+        offset = (page - 1) * page_size
+        stmt = stmt.limit(page_size).offset(offset)
+        
+        # Execute query
+        payments = self.session.exec(stmt).all()
+        
+        # Build response with current plan info for each member
+        # Optimize: Get all unique user_ids first, then fetch memberships and plans in bulk
+        user_ids = list(set([payment.user_id for payment in payments]))
+        
+        # Fetch all active memberships for these users in one query
+        today = date.today()
+        memberships_stmt = select(Membership).where(
+            and_(
+                Membership.user_id.in_(user_ids),
+                Membership.gym_id == gym_id,
+                Membership.end_date >= today,
+                Membership.status == "active"
+            )
+        ).order_by(Membership.user_id, Membership.end_date.desc())
+        all_memberships = self.session.exec(memberships_stmt).all()
+        
+        # Group memberships by user_id (get the most recent one per user)
+        memberships_by_user = {}
+        for membership in all_memberships:
+            if membership.user_id not in memberships_by_user:
+                memberships_by_user[membership.user_id] = membership
+        
+        # Get all plan_ids and fetch plans in one query
+        plan_ids = list(set([m.plan_id for m in memberships_by_user.values() if m.plan_id]))
+        plans_by_id = {}
+        if plan_ids:
+            plans_stmt = select(Plan).where(Plan.id.in_(plan_ids))
+            all_plans = self.session.exec(plans_stmt).all()
+            plans_by_id = {plan.id: plan for plan in all_plans}
+        
+        # Build response
+        pending_payments = []
+        ist = ZoneInfo("Asia/Kolkata")
+        
+        for payment in payments:
+            # Format payment_at in Indian format
+            payment_at = payment.created_at
+            if payment_at.tzinfo is None:
+                payment_at = payment_at.replace(tzinfo=ZoneInfo("UTC")).astimezone(ist)
+            else:
+                payment_at = payment_at.astimezone(ist)
+            payment_at_str = payment_at.strftime("%d-%m-%Y %H:%M:%S")
+            
+            # Get current plan for the member
+            current_plan = None
+            membership = memberships_by_user.get(payment.user_id)
+            
+            if membership:
+                plan = plans_by_id.get(membership.plan_id)
+                
+                if plan:
+                    # Use new_price if available, otherwise use plan.price
+                    total_price = float(membership.new_price) if membership.new_price else float(plan.price)
+                    days_left = (membership.end_date - today).days
+                    if days_left <= 7:
+                        status = "expiring_soon"
+                    else:
+                        status = "active"
+                    
+                    current_plan = CurrentPlanResponse(
+                        plan_id=plan.id,
+                        plan_name=plan.name,
+                        expiry_date=membership.end_date.isoformat(),
+                        monthly_price=round(total_price, 2),
+                        status=status,
+                        days_left=days_left
+                    )
+            
+            # Note: remarks is not stored in Payment model, so returning None
+            pending_payments.append(PendingPaymentResponse(
+                payment_id=payment.id,
+                user_id=payment.user_id,
+                proof_url=payment.proof_url,
+                remarks=None,  # Remarks not stored in Payment model currently
+                payment_at=payment_at_str,
+                current_plan=current_plan
+            ))
+        
+        has_next = (page * page_size) < total
+        
+        return PendingPaymentListResponse(
+            payments=pending_payments,
+            total=total,
+            page=page,
+            page_size=page_size,
+            has_next=has_next
+        )
 

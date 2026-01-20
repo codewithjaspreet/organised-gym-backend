@@ -13,6 +13,7 @@ from app.schemas.gym_rule import GymRuleResponse, GymRuleListResponse
 from app.schemas.membership import MembershipResponse
 from app.schemas.announcement import AnnouncementResponse, AnnouncementListResponse
 from app.schemas.dashboard import DashboardKPIsResponse
+from app.schemas.payments import PendingPaymentListResponse
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
 from app.services.user_service import UserService
@@ -23,6 +24,7 @@ from app.services.membership_service import MembershipService
 from app.services.announcement_service import AnnouncementService
 from app.services.dashboard_service import DashboardService
 from app.services.attendance_service import AttendanceService
+from app.services.payment import PaymentService
 from app.schemas.attendance import DailyAttendanceResponse
 from datetime import date
 
@@ -86,6 +88,36 @@ def get_all_members(
         page_size=page_size
     )
     return success_response(data=members_data, message="Members fetched successfully")
+
+
+@router.get("/pending-payments", response_model=APIResponse[PendingPaymentListResponse], status_code=status.HTTP_200_OK)
+def get_pending_payments(
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Number of items per page"),
+    session: SessionDep = None,
+    current_user: User = require_admin
+):
+    """Get all pending payments for approval with pagination"""
+    gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            data=None,
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    
+    payment_service = PaymentService(session=session)
+    pending_payments = payment_service.get_pending_payments(
+        gym_id=gym.id,
+        page=page,
+        page_size=page_size
+    )
+    
+    return success_response(
+        data=pending_payments,
+        message="Pending payments fetched successfully"
+    )
+
 
 @router.get("/dashboard", response_model=APIResponse[DashboardKPIsResponse], status_code=status.HTTP_200_OK)
 def get_dashboard_kpis(
