@@ -256,8 +256,13 @@ class PaymentService:
         payments = self.session.exec(stmt).all()
         
         # Build response with current plan info for each member
-        # Optimize: Get all unique user_ids first, then fetch memberships and plans in bulk
+        # Optimize: Get all unique user_ids first, then fetch users, memberships and plans in bulk
         user_ids = list(set([payment.user_id for payment in payments]))
+        
+        # Fetch all users in one query
+        users_stmt = select(User).where(User.id.in_(user_ids))
+        all_users = self.session.exec(users_stmt).all()
+        users_by_id = {user.id: user for user in all_users}
         
         # Fetch all active memberships for these users in one query
         today = date.today()
@@ -323,10 +328,15 @@ class PaymentService:
                         days_left=days_left
                     )
             
+            # Get user_name
+            user = users_by_id.get(payment.user_id)
+            user_name = user.user_name if user else ""
+            
             # Note: remarks is not stored in Payment model, so returning None
             pending_payments.append(PendingPaymentResponse(
                 payment_id=payment.id,
                 user_id=payment.user_id,
+                user_name=user_name,
                 proof_url=payment.proof_url,
                 remarks=None,  # Remarks not stored in Payment model currently
                 payment_at=payment_at_str,
