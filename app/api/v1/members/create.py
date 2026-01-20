@@ -1,6 +1,7 @@
 from fastapi import APIRouter, status, File, UploadFile, Form
 from sqlmodel import select
 from typing import Optional
+import time
 from app.core.permissions import require_any_authenticated
 from app.core.exceptions import NotFoundError, AlreadyExistsError
 from app.db.db import SessionDep
@@ -82,7 +83,7 @@ async def create_payment(
         proof_url = await cloudinary_service.upload_image(
             file=proof_file,
             folder=f"payments/{current_user.gym_id}",
-            public_id=f"payment_{current_user.id}_{plan_id}",
+            public_id=f"payment_{current_user.id}_{plan_id}_{int(time.time())}",
             optimize=True
         )
     except Exception as e:

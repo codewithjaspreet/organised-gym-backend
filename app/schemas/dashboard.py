@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from decimal import Decimal
+from app.schemas.user import CurrentPlanResponse
 
 
 class DailyAttendanceResponse(BaseModel):
@@ -32,6 +33,7 @@ class DashboardKPIsResponse(BaseModel):
     name: Optional[str] = Field(default=None, description="The user's name")
     plan_id: Optional[str] = Field(default=None, description="The member's current plan ID from active membership")
     plan_amount: Optional[Decimal] = Field(default=None, description="The member's current plan amount from active membership")
+    current_plan: Optional[CurrentPlanResponse] = Field(default=None, description="Current plan information for member")
     membership_expiry_date: Optional[str] = Field(default=None, description="Membership expiry date in Indian format (DD-MM-YYYY)")
     membership_days_remaining: Optional[int] = Field(default=None, description="Days remaining until membership expiry")
     last_7_days_attendance: Optional[List[DailyAttendanceResponse]] = Field(default=[], description="Last 7 days attendance streak")

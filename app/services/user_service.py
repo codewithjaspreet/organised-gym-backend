@@ -48,6 +48,7 @@ class UserService:
         # For members, get plan_id and plan_amount from active membership instead of user.plan_id
         plan_id = user.plan_id
         plan_amount = None
+        current_plan = None
         if role_name == "MEMBER" and user.gym_id:
             today = date.today()
             # Get active membership (status = 'active' and end_date >= today)
@@ -71,6 +72,23 @@ class UserService:
                 if plan:
                     # Use new_price if available, otherwise use plan.price (same logic as get_all_members)
                     plan_amount = active_membership.new_price if active_membership.new_price else plan.price
+
+                    # Build current_plan object (same as member-detail)
+                    total_price = float(active_membership.new_price) if active_membership.new_price else float(plan.price)
+                    days_left = (active_membership.end_date - today).days
+                    if days_left <= 7:
+                        status = "expiring_soon"
+                    else:
+                        status = "active"
+
+                    current_plan = CurrentPlanResponse(
+                        plan_id=plan.id,
+                        plan_name=plan.name,
+                        expiry_date=active_membership.end_date.isoformat(),
+                        monthly_price=round(total_price, 2),
+                        status=status,
+                        days_left=days_left
+                    )
             else:
                 # Check if user has any expired membership (fallback similar to get_all_members)
                 expired_stmt = select(Membership).where(
@@ -98,6 +116,7 @@ class UserService:
         user_dict["gym_name"] = gym_name
         user_dict["plan_id"] = plan_id
         user_dict["plan_amount"] = plan_amount
+        user_dict["current_plan"] = current_plan
         return UserResponse(**user_dict)
 
     def get_member_detail(self, member_id: str, gym_id: str) -> MemberDetailResponse:

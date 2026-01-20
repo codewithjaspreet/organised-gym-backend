@@ -54,6 +54,15 @@ class UserUpdate(BaseModel):
     gym_id: Optional[str] = None
     plan_id: Optional[str] = None
 
+class CurrentPlanResponse(BaseModel):
+    """Current plan information for member"""
+    plan_id: str
+    plan_name: str
+    expiry_date: str
+    monthly_price: float
+    status: str
+    days_left: int
+
 class UserResponse(BaseModel):
     id: str
     user_name: str
@@ -67,6 +76,7 @@ class UserResponse(BaseModel):
     gym_name: Optional[str] = None
     plan_id: Optional[str] = None
     plan_amount: Optional[Decimal] = None
+    current_plan: Optional[CurrentPlanResponse] = None
     role_id: str
     role_name: Optional[str] = None
     city: str
@@ -86,16 +96,6 @@ class MemberListItemResponse(BaseModel):
     plan_status: Optional[str] = None
     plan_expiry_date: Optional[date] = None
     days_left: Optional[int] = None
-
-
-class CurrentPlanResponse(BaseModel):
-    """Current plan information for member"""
-    plan_id: str
-    plan_name: str
-    expiry_date: str
-    monthly_price: float
-    status: str
-    days_left: int
 
 
 class MemberDetailResponse(BaseModel):
