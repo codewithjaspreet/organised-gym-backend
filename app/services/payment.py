@@ -6,7 +6,7 @@ from app.models.payments import Payment
 from app.models.membership import Membership
 from app.models.plan import Plan
 from app.models.gym import Gym
-from app.schemas.payments import PaymentCreate, PaymentResponse, PaymentUpdate, MemberPaymentCreate
+from app.schemas.payments import PaymentCreate, PaymentResponse, PaymentUpdate, MemberPaymentCreate, PaymentStatusUpdate, PaymentStatusType
 
 
 class PaymentService:
@@ -153,33 +153,45 @@ class PaymentService:
 
         return PaymentResponse.model_validate(db_payment.model_dump())
 
-    def approve_payment(
+    def update_payment_status(
         self,
-        payment_id: str,
+        payment_status_update: PaymentStatusUpdate,
         verified_by: str
     ) -> PaymentResponse:
-        """Approve payment and send thank you notification to member"""
-        stmt = select(Payment).where(Payment.id == payment_id)
+        """Approve or reject payment and send notification to member"""
+        stmt = select(Payment).where(Payment.id == payment_status_update.payment_id)
         payment = self.session.exec(stmt).first()
         if not payment:
-            raise NotFoundError(detail=f"Payment with id {payment_id} not found")
+            raise NotFoundError(detail=f"Payment with id {payment_status_update.payment_id} not found")
 
-        # Update payment status
-        payment.status = "verified"
-        payment.verified_by = verified_by
+        # Update payment status based on the status type
+        if payment_status_update.status == PaymentStatusType.APPROVE:
+            payment.status = "verified"
+            payment.verified_by = verified_by
+        elif payment_status_update.status == PaymentStatusType.REJECT:
+            payment.status = "rejected"
+            payment.verified_by = verified_by
+        else:
+            raise ValueError(f"Invalid status: {payment_status_update.status}")
 
         self.session.commit()
         self.session.refresh(payment)
 
-        # Send thank you FCM notification to member
+        # Send FCM notification to member
         try:
             from app.utils.fcm_notification import send_fcm_notification_to_user
             
-            notification_title = "Payment Verified"
-            notification_message = f"Thank you! Your payment of ₹{payment.amount} has been verified successfully."
+            if payment_status_update.status == PaymentStatusType.APPROVE:
+                notification_title = "Payment Verified"
+                notification_message = f"Thank you! Your payment of ₹{payment.amount} has been verified successfully."
+                notification_type = "payment_verified"
+            else:  # REJECT
+                notification_title = "Payment Rejected"
+                notification_message = f"Your payment of ₹{payment.amount} has been rejected. Please contact the gym for more details."
+                notification_type = "payment_rejected"
             
             notification_data = {
-                "type": "payment_verified",
+                "type": notification_type,
                 "payment_id": payment.id,
                 "gym_id": payment.gym_id,
                 "screen": "/payments"
@@ -194,10 +206,10 @@ class PaymentService:
                 session=self.session
             )
         except Exception as e:
-            # Log error but don't fail payment approval
+            # Log error but don't fail payment status update
             import logging
             logger = logging.getLogger(__name__)
-            logger.error(f"Failed to send payment verification notification to member: {str(e)}")
+            logger.error(f"Failed to send payment status notification to member: {str(e)}")
 
         return PaymentResponse.model_validate(payment.model_dump())
 

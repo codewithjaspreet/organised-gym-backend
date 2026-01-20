@@ -19,6 +19,12 @@ class AnnouncementService:
     def create_announcement(self, announcement: AnnouncementCreate) -> AnnouncementResponse:
         """Create a new announcement and send FCM notifications to gym members based on send_to filter"""
         from app.utils.fcm_notification import send_fcm_notification_to_gym_members_by_filter
+        from app.core.exceptions import ValidationError
+        
+        # Validate member_ids when send_to is "Specific Members"
+        if announcement.send_to.value == "Specific Members":
+            if not announcement.member_ids or len(announcement.member_ids) == 0:
+                raise ValidationError(detail="member_ids is required when send_to is 'Specific Members'")
         
         db_announcement = Announcement(
             gym_id=announcement.gym_id,
@@ -55,7 +61,8 @@ class AnnouncementService:
                     body=announcement.message,
                     send_to=announcement.send_to.value,
                     data=notification_data,
-                    session=self.session
+                    session=self.session,
+                    member_ids=announcement.member_ids
                 )
                 
                 # Log notification results
