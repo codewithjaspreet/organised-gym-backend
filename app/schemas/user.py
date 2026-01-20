@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from typing import List, Optional
+from decimal import Decimal
 from pydantic import BaseModel, Field, field_validator
 from app.models.user import Gender
 
@@ -65,6 +66,7 @@ class UserResponse(BaseModel):
     gym_id: Optional[str] = None
     gym_name: Optional[str] = None
     plan_id: Optional[str] = None
+    plan_amount: Optional[Decimal] = None
     role_id: str
     role_name: Optional[str] = None
     city: str
