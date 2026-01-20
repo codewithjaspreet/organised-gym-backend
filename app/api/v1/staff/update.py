@@ -3,13 +3,13 @@ from sqlmodel import select
 from app.core.permissions import require_admin_or_staff
 from app.db.db import SessionDep
 from app.models.user import User, Role
-from app.models.billing import Payment
+from app.models.payments import Payment
 from app.schemas.user import UserResponse, UserUpdate
-from app.schemas.billing import PaymentResponse, PaymentUpdate
+from app.schemas.payments import PaymentResponse, PaymentUpdate
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
 from app.services.user_service import UserService
-from app.services.billing_service import BillingService
+from app.services.payment import PaymentService
 
 router = APIRouter(prefix="/update", tags=["staff"])
 
@@ -60,7 +60,7 @@ def update_payment(
             data=None
         )
     
-    billing_service = BillingService(session=session)
+    billing_service = PaymentService(session=session)
     existing_payment = billing_service.get_payment(payment_id)
     
     if existing_payment.gym_id != gym_id:

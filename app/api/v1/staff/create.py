@@ -3,11 +3,11 @@ from sqlmodel import select
 from app.core.permissions import require_admin_or_staff
 from app.db.db import SessionDep
 from app.models.user import User, Role
-from app.models.billing import Payment
-from app.schemas.billing import PaymentCreate, PaymentResponse
+from app.models.payments import Payment
+from app.schemas.payments import PaymentCreate, PaymentResponse
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
-from app.services.billing_service import BillingService
+from app.services.payment import PaymentService
 
 router = APIRouter(prefix="/create", tags=["staff"])
 
@@ -52,7 +52,7 @@ def create_payment(
             data=None
         )
     
-    billing_service = BillingService(session=session)
+    billing_service = PaymentService(session=session)
     payment_data = billing_service.create_payment(payment)
     return success_response(data=payment_data, message="Payment created successfully")
 

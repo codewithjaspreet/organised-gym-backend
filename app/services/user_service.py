@@ -170,7 +170,7 @@ class UserService:
         
         # Apply pending_fees filter (if provided, overrides status filter for fees)
         if pending_fees is not None:
-            from app.models.billing import Payment
+            from app.models.payments import Payment
             # Get users with pending or overdue payments
             today = date.today()
             user_ids_subquery = select(func.distinct(Payment.user_id)).where(
@@ -221,7 +221,7 @@ class UserService:
                     )
                 elif status == "payment_pending":
                     # Payment pending: users with pending payments
-                    from app.models.billing import Payment
+                    from app.models.payments import Payment
                     user_ids_subquery = select(func.distinct(Payment.user_id)).where(
                         and_(
                             Payment.gym_id == gym_id,
@@ -309,7 +309,7 @@ class UserService:
                         )
                     )
                 elif status == "payment_pending":
-                    from app.models.billing import Payment
+                    from app.models.payments import Payment
                     user_ids_subquery = select(func.distinct(Payment.user_id)).where(
                         and_(
                             Payment.gym_id == gym_id,
