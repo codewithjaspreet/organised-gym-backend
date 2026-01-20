@@ -1,5 +1,6 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, status, File, UploadFile, Form
 from sqlmodel import select
+from typing import Optional
 from app.core.permissions import require_any_authenticated
 from app.core.exceptions import NotFoundError, AlreadyExistsError
 from app.db.db import SessionDep
@@ -10,6 +11,7 @@ from app.schemas.payments import MemberPaymentCreate, PaymentResponse as Payment
 from app.schemas.attendance import MarkAttendanceRequest, MarkAttendanceResponse, CheckoutRequest, CheckoutResponse
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
+from app.utils.cloudinary import get_cloudinary_service
 from app.services.membership_service import MembershipService
 from app.services.payment import PaymentService
 from app.services.attendance_service import AttendanceService
@@ -47,12 +49,14 @@ def create_membership(
 
 
 @router.post("/payments", response_model=APIResponse[PaymentResponseSchema], status_code=status.HTTP_201_CREATED)
-def create_payment(
-    payment: MemberPaymentCreate,
+async def create_payment(
+    plan_id: str = Form(..., description="The plan id"),
+    proof_file: UploadFile = File(..., description="The payment proof/screenshot file"),
+    remarks: Optional[str] = Form(None, description="Payment remarks/notes"),
     session: SessionDep = None,
     current_user: User = require_any_authenticated
 ):
-    """Create a payment for the current member's plan"""
+    """Create a payment for the current member's plan with file upload"""
     # Get role name from database
     stmt = select(RoleModel).where(RoleModel.id == current_user.role_id)
     role = session.exec(stmt).first()
@@ -72,13 +76,36 @@ def create_payment(
             status_code=status.HTTP_404_NOT_FOUND
         )
     
+    # Upload file to Cloudinary
+    cloudinary_service = get_cloudinary_service()
+    try:
+        proof_url = await cloudinary_service.upload_image(
+            file=proof_file,
+            folder=f"payments/{current_user.gym_id}",
+            public_id=f"payment_{current_user.id}_{plan_id}",
+            optimize=True
+        )
+    except Exception as e:
+        return failure_response(
+            message=f"Failed to upload payment proof: {str(e)}",
+            data=None,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Create payment data object
+    payment_data = MemberPaymentCreate(
+        plan_id=plan_id,
+        proof_url=proof_url,
+        remarks=remarks
+    )
+    
     payment_service = PaymentService(session=session)
     try:
-        payment_data = payment_service.create_member_payment(
+        payment_result = payment_service.create_member_payment(
             user_id=current_user.id,
-            payment_data=payment
+            payment_data=payment_data
         )
-        return success_response(data=payment_data, message="Payment created successfully")
+        return success_response(data=payment_result, message="Payment created successfully")
     except NotFoundError as e:
         return failure_response(
             message=str(e.detail) if hasattr(e, 'detail') else str(e),

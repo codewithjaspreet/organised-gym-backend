@@ -52,3 +52,8 @@ class InvalidUserNameError(HTTPException):
 class InvalidPasswordError(HTTPException):
     def __init__(self, detail: str = "Invalid password"):
         super().__init__(status_code=400, detail=detail)
+
+
+class ValidationError(HTTPException):
+    def __init__(self, detail: str = "Validation error"):
+        super().__init__(status_code=400, detail=detail)
