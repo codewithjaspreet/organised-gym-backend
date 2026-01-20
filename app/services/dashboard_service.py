@@ -8,7 +8,7 @@ from app.models.user import Role, User
 from app.models.role import Role as RoleModel
 from app.models.membership import Membership
 from app.models.attendance import Attendance
-from app.models.billing import Payment
+from app.models.payments import Payment
 from app.schemas.dashboard import DashboardKPIsResponse, DailyAttendanceResponse
 
 
