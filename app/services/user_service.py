@@ -24,6 +24,7 @@ class UserService:
     def get_user(self, user_id: str) -> UserResponse:
         from app.models.role import Role as RoleModel
         from app.models.gym import Gym
+        from datetime import date
         
         stmt = select(User).where(User.id == user_id)
         user = self.session.exec(stmt).first()
@@ -44,9 +45,59 @@ class UserService:
             gym = self.session.exec(gym_stmt).first()
             gym_name = gym.name if gym else None
         
+        # For members, get plan_id and plan_amount from active membership instead of user.plan_id
+        plan_id = user.plan_id
+        plan_amount = None
+        if role_name == "MEMBER" and user.gym_id:
+            today = date.today()
+            # Get active membership (status = 'active' and end_date >= today)
+            membership_stmt = select(Membership).where(
+                and_(
+                    Membership.user_id == user_id,
+                    Membership.gym_id == user.gym_id,
+                    Membership.status == "active",
+                    Membership.end_date >= today
+                )
+            ).order_by(Membership.end_date.desc())
+            active_membership = self.session.exec(membership_stmt).first()
+            
+            if active_membership and active_membership.plan_id:
+                plan_id = active_membership.plan_id
+                
+                # Get plan details to get the amount
+                plan_stmt = select(Plan).where(Plan.id == active_membership.plan_id)
+                plan = self.session.exec(plan_stmt).first()
+                
+                if plan:
+                    # Use new_price if available, otherwise use plan.price (same logic as get_all_members)
+                    plan_amount = active_membership.new_price if active_membership.new_price else plan.price
+            else:
+                # Check if user has any expired membership (fallback similar to get_all_members)
+                expired_stmt = select(Membership).where(
+                    and_(
+                        Membership.user_id == user_id,
+                        Membership.gym_id == user.gym_id,
+                        Membership.end_date < today
+                    )
+                ).order_by(Membership.end_date.desc())
+                expired_membership = self.session.exec(expired_stmt).first()
+                
+                if expired_membership and expired_membership.plan_id:
+                    plan_id = expired_membership.plan_id
+                    
+                    # Get plan details to get the amount
+                    plan_stmt = select(Plan).where(Plan.id == expired_membership.plan_id)
+                    plan = self.session.exec(plan_stmt).first()
+                    
+                    if plan:
+                        # Use new_price if available, otherwise use plan.price
+                        plan_amount = expired_membership.new_price if expired_membership.new_price else plan.price
+        
         user_dict = user.model_dump(exclude={"password_hash"})
         user_dict["role_name"] = role_name
         user_dict["gym_name"] = gym_name
+        user_dict["plan_id"] = plan_id
+        user_dict["plan_amount"] = plan_amount
         return UserResponse(**user_dict)
 
     def get_member_detail(self, member_id: str, gym_id: str) -> MemberDetailResponse:

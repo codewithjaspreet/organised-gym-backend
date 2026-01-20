@@ -229,20 +229,23 @@ class DashboardService:
         user_name = user.user_name if user else None
         name = user.name if user else None
         
-        # Get membership expiry date and days remaining
+        # Get membership expiry date, days remaining, plan_id, and plan_amount
         membership_expiry_date = None
         membership_days_remaining = None
+        plan_id = None
+        plan_amount = None
         
         if gym_id:
-            # Get active membership (status = 'active' and end_date >= today)
+            from app.models.plan import Plan
+            
+            # Get active membership (end_date >= today) - same logic as member listing
             membership_stmt = select(Membership).where(
                 and_(
                     Membership.user_id == user_id,
                     Membership.gym_id == gym_id,
-                    Membership.status == "active",
                     Membership.end_date >= today
                 )
-            ).order_by(Membership.end_date.asc())
+            ).order_by(Membership.end_date.desc())
             active_membership = self.session.exec(membership_stmt).first()
             
             if active_membership:
@@ -250,6 +253,38 @@ class DashboardService:
                 membership_expiry_date = expiry_date.strftime("%d-%m-%Y")
                 days_remaining = (expiry_date - today).days
                 membership_days_remaining = max(0, days_remaining)
+                plan_id = active_membership.plan_id
+                
+                # Get plan details to get the amount (same logic as get_all_members)
+                if plan_id:
+                    plan_stmt = select(Plan).where(Plan.id == plan_id)
+                    plan = self.session.exec(plan_stmt).first()
+                    
+                    if plan:
+                        # Use new_price if available, otherwise use plan.price
+                        plan_amount = active_membership.new_price if active_membership.new_price else plan.price
+            else:
+                # Check if user has any expired membership (same fallback as member listing)
+                expired_stmt = select(Membership).where(
+                    and_(
+                        Membership.user_id == user_id,
+                        Membership.gym_id == gym_id,
+                        Membership.end_date < today
+                    )
+                ).order_by(Membership.end_date.desc())
+                expired_membership = self.session.exec(expired_stmt).first()
+                
+                if expired_membership:
+                    plan_id = expired_membership.plan_id
+                    
+                    # Get plan details to get the amount
+                    if plan_id:
+                        plan_stmt = select(Plan).where(Plan.id == plan_id)
+                        plan = self.session.exec(plan_stmt).first()
+                        
+                        if plan:
+                            # Use new_price if available, otherwise use plan.price
+                            plan_amount = expired_membership.new_price if expired_membership.new_price else plan.price
         
         # Get last 7 days attendance streak
         last_7_days_attendance = self._get_last_7_days_attendance(user_id)
@@ -314,6 +349,8 @@ class DashboardService:
             unpaid_percentage=0.0,
             user_name=user_name,
             name=name,
+            plan_id=plan_id,
+            plan_amount=plan_amount,
             membership_expiry_date=membership_expiry_date,
             membership_days_remaining=membership_days_remaining,
             last_7_days_attendance=last_7_days_attendance,
