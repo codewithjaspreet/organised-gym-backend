@@ -1,8 +1,9 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, List
 from enum import Enum
 from pydantic import BaseModel, Field
+from app.schemas.user import CurrentPlanResponse
 
 
 class PaymentCreate(BaseModel):
@@ -48,4 +49,23 @@ class PaymentStatusType(str, Enum):
 class PaymentStatusUpdate(BaseModel):
     payment_id: str = Field(description="The payment id")
     status: PaymentStatusType = Field(description="Payment status: Approve or Reject")
+
+
+class PendingPaymentResponse(BaseModel):
+    """Response for pending payment with member details"""
+    payment_id: str = Field(description="The payment id")
+    user_id: str = Field(description="The user id who made the payment")
+    proof_url: Optional[str] = Field(default=None, description="The payment proof URL")
+    remarks: Optional[str] = Field(default=None, description="Payment remarks/notes")
+    payment_at: str = Field(description="Payment creation date and time in Indian format (DD-MM-YYYY HH:MM:SS)")
+    current_plan: Optional[CurrentPlanResponse] = Field(default=None, description="Current plan information for the member")
+
+
+class PendingPaymentListResponse(BaseModel):
+    """Paginated response for pending payments"""
+    payments: List[PendingPaymentResponse] = Field(description="List of pending payments")
+    total: int = Field(description="Total number of pending payments")
+    page: int = Field(description="Current page number")
+    page_size: int = Field(description="Number of items per page")
+    has_next: bool = Field(description="Whether there are more pages")
 
