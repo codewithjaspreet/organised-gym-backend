@@ -6,7 +6,7 @@ from uuid import uuid4
 
 if TYPE_CHECKING:
     from app.models.attendance import Attendance
-    from app.models.billing import Payment
+    from app.models.payments import Payment
     from app.models.gym_subscription import GymSubscription
     from app.models.membership import Membership
     from app.models.plan import Plan

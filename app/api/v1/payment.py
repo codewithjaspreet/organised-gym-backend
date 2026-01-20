@@ -87,7 +87,7 @@ def update_payment(
     check_gym_ownership(db_payment.gym_id, current_user, session)
     
     try:
-        billing_service = BillingService(session=session)
+        billing_service = PaymentService(session=session)
         updated_payment = billing_service.update_payment(payment_id, payment)
         return success_response(data=updated_payment, message="Payment updated successfully")
     except NotFoundError as e:
@@ -114,7 +114,7 @@ def delete_payment(
     check_gym_ownership(db_payment.gym_id, current_user, session)
     
     try:
-        billing_service = BillingService(session=session)
+        billing_service = PaymentService(session=session)
         billing_service.delete_payment(payment_id)
         return success_response(data=None, message="Payment deleted successfully")
     except NotFoundError as e:

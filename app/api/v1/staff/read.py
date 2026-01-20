@@ -3,14 +3,14 @@ from sqlmodel import select
 from app.core.permissions import require_admin_or_staff
 from app.db.db import SessionDep
 from app.models.user import User, Role
-from app.models.billing import Payment
+from app.models.payments import Payment
 from app.schemas.user import UserResponse
-from app.schemas.billing import PaymentResponse
+from app.schemas.payments import PaymentResponse
 from app.schemas.dashboard import DashboardKPIsResponse
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
 from app.services.user_service import UserService
-from app.services.billing_service import BillingService
+from app.services.payment import PaymentService
 from app.services.dashboard_service import DashboardService
 
 router = APIRouter(prefix="/read", tags=["staff"])
@@ -81,7 +81,7 @@ def get_payment(
             data=None
         )
     
-    billing_service = BillingService(session=session)
+    billing_service = PaymentService(session=session)
     payment = billing_service.get_payment(payment_id)
     
     if payment.gym_id != gym_id:

@@ -3,11 +3,11 @@ from sqlmodel import select
 from app.core.permissions import require_any_authenticated, require_admin, require_admin_or_staff, check_gym_ownership
 from app.db.db import SessionDep
 from app.models.user import User, Role
-from app.models.billing import Payment
-from app.schemas.billing import PaymentCreate, PaymentResponse, PaymentUpdate
+from app.models.payments import Payment
+from app.schemas.payments import PaymentCreate, PaymentResponse, PaymentUpdate
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
-from app.services.billing_service import BillingService
+from app.services.payment import PaymentService
 from app.core.exceptions import NotFoundError
 
 router = APIRouter(prefix="/payments", tags=["payments"])
@@ -26,7 +26,7 @@ def create_payment(
         )
     
     try:
-        billing_service = BillingService(session=session)
+        billing_service = PaymentService(session=session)
         payment_data = billing_service.create_payment(payment)
         return success_response(data=payment_data, message="Payment created successfully")
     except Exception as e:
@@ -59,7 +59,7 @@ def get_payment(
         )
     
     try:
-        billing_service = BillingService(session=session)
+        billing_service = PaymentService(session=session)
         payment_data = billing_service.get_payment(payment_id)
         return success_response(data=payment_data, message="Payment fetched successfully")
     except NotFoundError as e:
@@ -87,7 +87,7 @@ def update_payment(
     check_gym_ownership(db_payment.gym_id, current_user, session)
     
     try:
-        billing_service = BillingService(session=session)
+        billing_service = PaymentService(session=session)
         updated_payment = billing_service.update_payment(payment_id, payment)
         return success_response(data=updated_payment, message="Payment updated successfully")
     except NotFoundError as e:
@@ -114,7 +114,7 @@ def delete_payment(
     check_gym_ownership(db_payment.gym_id, current_user, session)
     
     try:
-        billing_service = BillingService(session=session)
+        billing_service = PaymentService(session=session)
         billing_service.delete_payment(payment_id)
         return success_response(data=None, message="Payment deleted successfully")
     except NotFoundError as e:
