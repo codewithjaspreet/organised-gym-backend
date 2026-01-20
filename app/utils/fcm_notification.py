@@ -248,7 +248,8 @@ def send_fcm_notification_to_gym_members_by_filter(
     body: str,
     send_to: str,
     data: Optional[dict] = None,
-    session = None
+    session = None,
+    member_ids: Optional[list[str]] = None
 ) -> list[dict]:
     """
     Send FCM notification to gym members based on send_to filter.
@@ -257,9 +258,10 @@ def send_fcm_notification_to_gym_members_by_filter(
         gym_id: Gym ID
         title: Notification title
         body: Notification body/message
-        send_to: Filter type - "All", "Pending Fees", "Birthday", "Plan Expiring Today", "Plan Expiring in 3 days"
+        send_to: Filter type - "All", "Pending Fees", "Birthday", "Plan Expiring Today", "Plan Expiring in 3 days", "Specific Members"
         data: Optional additional data payload
         session: Database session (required)
+        member_ids: Optional list of member user IDs (required when send_to is "Specific Members")
         
     Returns:
         list[dict]: List of results for each member with user_id included
@@ -272,7 +274,7 @@ def send_fcm_notification_to_gym_members_by_filter(
     from app.models.user import User
     from app.models.role import Role as RoleModel
     from app.models.membership import Membership
-    from app.models.billing import Payment
+    from app.models.payments import Payment
     
     # Get MEMBER role
     member_role_stmt = select(RoleModel).where(RoleModel.name == "MEMBER")
@@ -373,6 +375,20 @@ def send_fcm_notification_to_gym_members_by_filter(
             and_(
                 *base_conditions,
                 User.id.in_(expiring_user_ids)
+            )
+        )
+        members = session.exec(stmt).all()
+        
+    elif send_to == "Specific Members":
+        # Get specific members by their IDs
+        if not member_ids:
+            return []
+        
+        # Verify all member_ids belong to the gym
+        stmt = select(User).where(
+            and_(
+                *base_conditions,
+                User.id.in_(member_ids)
             )
         )
         members = session.exec(stmt).all()

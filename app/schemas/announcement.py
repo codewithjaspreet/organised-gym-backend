@@ -10,6 +10,7 @@ class SendToType(str, Enum):
     BIRTHDAY = "Birthday"
     PLAN_EXPIRING_TODAY = "Plan Expiring Today"
     PLAN_EXPIRING_IN_3_DAYS = "Plan Expiring in 3 days"
+    SPECIFIC_MEMBERS = "Specific Members"
 
 
 class AnnouncementData(BaseModel):
@@ -23,6 +24,7 @@ class AnnouncementCreate(BaseModel):
     user_id: str = Field(description="The user id")
     gym_id: str = Field(description="The gym id")
     send_to: SendToType = Field(description="Who to send the announcement to", default=SendToType.ALL)
+    member_ids: Optional[List[str]] = Field(default=None, description="List of member user IDs (required when send_to is 'Specific Members')")
     data: Optional[AnnouncementData] = Field(default=None, description="Data object containing route for deep linking")
 
 

@@ -1,6 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
+from enum import Enum
 from pydantic import BaseModel, Field
 
 
@@ -37,4 +38,14 @@ class MemberPaymentCreate(BaseModel):
     plan_id: str = Field(description="The plan id")
     proof_url: str = Field(description="The payment proof/screenshot URL")
     remarks: Optional[str] = Field(default=None, description="Payment remarks/notes", nullable=True)
+
+
+class PaymentStatusType(str, Enum):
+    APPROVE = "Approve"
+    REJECT = "Reject"
+
+
+class PaymentStatusUpdate(BaseModel):
+    payment_id: str = Field(description="The payment id")
+    status: PaymentStatusType = Field(description="Payment status: Approve or Reject")
 

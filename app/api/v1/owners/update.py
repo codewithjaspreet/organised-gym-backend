@@ -10,7 +10,7 @@ from app.schemas.gym import GymResponse, GymUpdate
 from app.schemas.plan import PlanResponse, PlanUpdate
 from app.schemas.membership import MembershipResponse, MembershipUpdate
 from app.schemas.gym_rule import GymRuleResponse, GymRuleUpdate
-from app.schemas.payments import PaymentResponse
+from app.schemas.payments import PaymentResponse, PaymentStatusUpdate
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
 from app.services.user_service import UserService
@@ -229,13 +229,13 @@ def update_gym_rule(
     return success_response(data=updated_rule, message="Gym rule updated successfully")
 
 
-@router.put("/payments/{payment_id}/approve", response_model=APIResponse[PaymentResponse], status_code=status.HTTP_200_OK)
-def approve_payment(
-    payment_id: str,
+@router.put("/payments/status", response_model=APIResponse[PaymentResponse], status_code=status.HTTP_200_OK)
+def update_payment_status(
+    payment_status_update: PaymentStatusUpdate,
     session: SessionDep = None,
     current_user: User = require_admin
 ):
-    """Approve a payment and send thank you notification to member"""
+    """Approve or reject a payment and send notification to member"""
     gym = get_owner_gym(current_user, session)
     if not gym:
         return failure_response(
@@ -244,7 +244,7 @@ def approve_payment(
         )
     
     # Verify payment belongs to owner's gym
-    stmt = select(Payment).where(Payment.id == payment_id)
+    stmt = select(Payment).where(Payment.id == payment_status_update.payment_id)
     payment = session.exec(stmt).first()
     
     if not payment:
@@ -259,19 +259,31 @@ def approve_payment(
             status_code=status.HTTP_403_FORBIDDEN
         )
     
-    if payment.status == "verified":
+    # Check if payment is already in the requested state
+    if payment_status_update.status.value == "Approve" and payment.status == "verified":
         return failure_response(
             message="Payment is already approved",
             status_code=status.HTTP_400_BAD_REQUEST
         )
     
+    if payment_status_update.status.value == "Reject" and payment.status == "rejected":
+        return failure_response(
+            message="Payment is already rejected",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+    
     payment_service = PaymentService(session=session)
     try:
-        approved_payment = payment_service.approve_payment(
-            payment_id=payment_id,
+        updated_payment = payment_service.update_payment_status(
+            payment_status_update=payment_status_update,
             verified_by=current_user.id
         )
-        return success_response(data=approved_payment, message="Payment approved successfully")
+        
+        status_message = "approved" if payment_status_update.status.value == "Approve" else "rejected"
+        return success_response(
+            data=updated_payment, 
+            message=f"Payment {status_message} successfully"
+        )
     except NotFoundError as e:
         return failure_response(
             message=str(e.detail) if hasattr(e, 'detail') else str(e),
