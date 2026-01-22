@@ -5,7 +5,7 @@ build/
 dist/
 wheels/
 *.egg-info
-firebase-service-account.json
+organised_gym_service_account.json
 firebase/
 # Virtual environments
 .venv

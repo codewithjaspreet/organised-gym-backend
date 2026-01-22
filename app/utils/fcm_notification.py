@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 # Path to service account file - use from config or default
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 def get_service_account_path() -> Path:
     """Get service account path from config or use default"""
     # Check both firebase_credentials_path and firebase_service_account_path
@@ -30,7 +30,7 @@ def get_service_account_path() -> Path:
         return BASE_DIR / path
     
     # Default path
-    return BASE_DIR / "firebase" / "organised_gym_service_account.json"
+    return BASE_DIR / "organised_gym_service_account.json"
 
 
 def get_fcm_send_url() -> str:
