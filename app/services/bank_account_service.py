@@ -37,6 +37,7 @@ class BankAccountService:
             account_number=bank_account.account_number,
             ifsc_code=bank_account.ifsc_code,
             upi_id=bank_account.upi_id,
+            qr_code_url=bank_account.qr_code_url,
             created_at=datetime.now(),
             updated_at=datetime.now()
         )

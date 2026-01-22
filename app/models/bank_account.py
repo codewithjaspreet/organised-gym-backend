@@ -47,6 +47,11 @@ class BankAccount(SQLModel, table=True):
         description="The UPI ID",
         nullable=True
     )
+    qr_code_url: Optional[str] = Field(
+        description="The QR code URL",
+        nullable=True,
+        default=None
+    )
     created_at: datetime = Field(
         description="The bank account creation date",
         default_factory=datetime.now
