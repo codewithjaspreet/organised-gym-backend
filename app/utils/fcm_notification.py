@@ -73,29 +73,49 @@ def get_fcm_send_url() -> str:
     return f"https://fcm.googleapis.com/v1/projects/{settings.firebase_project_id}/messages:send"
 
 
-def get_fcm_access_token() -> str:
-    """
-    Generate FCM access token using service account credentials.
+# def get_fcm_access_token() -> str:
+#     """
+#     Generate FCM access token using service account credentials.
     
-    Returns:
-        str: Access token for FCM API
+#     Returns:
+#         str: Access token for FCM API
         
-    Raises:
-        FileNotFoundError: If service account file is not found
-        Exception: If token generation fails
-    """
-    service_account_path = get_service_account_path()
-    if not service_account_path.exists():
-        raise FileNotFoundError(
-            f"Firebase service account file not found at: {service_account_path}"
-        )
+#     Raises:
+#         FileNotFoundError: If service account file is not found
+#         Exception: If token generation fails
+#     """
+#     service_account_path = get_service_account_path()
+#     if not service_account_path.exists():
+#         raise FileNotFoundError(
+#             f"Firebase service account file not found at: {service_account_path}"
+#         )
     
-    credentials = service_account.Credentials.from_service_account_file(
-        str(service_account_path),
-        scopes=["https://www.googleapis.com/auth/firebase.messaging"]
-    )
-    credentials.refresh(Request())
-    return credentials.token
+#     credentials = service_account.Credentials.from_service_account_file(
+#         str(service_account_path),
+#         scopes=["https://www.googleapis.com/auth/firebase.messaging"]
+#     )
+#     credentials.refresh(Request())
+#     return credentials.token
+import base64
+import json
+
+def get_fcm_access_token() -> str:
+
+    if settings.firebase_service_account_json_base64:
+        decoded = base64.b64decode(
+            settings.firebase_service_account_json_base64
+        ).decode("utf-8")
+
+        info = json.loads(decoded)
+
+        credentials = service_account.Credentials.from_service_account_info(
+            info,
+            scopes=["https://www.googleapis.com/auth/firebase.messaging"]
+        )
+        credentials.refresh(Request())
+        return credentials.token
+
+    raise RuntimeError("Firebase credentials not configured")
 
 
 def send_fcm_notification(
