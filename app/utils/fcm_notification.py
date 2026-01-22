@@ -26,11 +26,46 @@ def get_service_account_path() -> Path:
         # If path is absolute, use it directly; otherwise relative to BASE_DIR
         path = Path(service_account_path)
         if path.is_absolute():
+            # If absolute path exists, use it
+            if path.exists():
+                return path
+            
+            # Try alternative locations if absolute path doesn't exist
+            # This handles the case where env var is set for Docker (/app/...) but running locally
+            alternative_paths = []
+            
+            # If path starts with /app/, try local equivalents
+            if str(path).startswith("/app/"):
+                # Remove /app/ prefix and try with BASE_DIR
+                relative_path = Path(*path.parts[2:])  # Skip "/" and "app"
+                alternative_paths.append(BASE_DIR / relative_path)
+                alternative_paths.append(BASE_DIR / "app" / relative_path)
+                # Also try /app/app/... for Docker structure
+                alternative_paths.append(Path("/app") / "app" / relative_path)
+            
+            # Try all alternatives
+            for alt_path in alternative_paths:
+                if alt_path.exists():
+                    return alt_path
+            
+            # Return original path (will raise error if not found)
             return path
-        return BASE_DIR / path
+        return BASE_DIR / service_account_path
     
-    # Default path
-    return BASE_DIR / "organised_gym_service_account.json"
+    # Default path - try multiple locations
+    default_paths = [
+        BASE_DIR / "app" / "firebase" / "organised_gym_service_account.json",
+        BASE_DIR / "firebase" / "organised_gym_service_account.json",
+        Path("/app") / "app" / "firebase" / "organised_gym_service_account.json",
+        Path("/app") / "firebase" / "organised_gym_service_account.json",
+    ]
+    
+    for path in default_paths:
+        if path.exists():
+            return path
+    
+    # Return the first default path if none exist (will raise error later)
+    return default_paths[0]
 
 
 def get_fcm_send_url() -> str:
