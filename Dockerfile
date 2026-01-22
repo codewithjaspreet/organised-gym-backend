@@ -23,7 +23,7 @@ RUN uv sync
 
 # Activate virtual environment
 ENV PATH="/app/.venv/bin:${PATH}"
-ENV FIREBASE_CREDENTIALS_PATH=./firebase/organised_gym_service_account.json
+ENV FIREBASE_CREDENTIALS_PATH=/app/app/firebase/organised_gym_service_account.json
 
 
 EXPOSE 80
