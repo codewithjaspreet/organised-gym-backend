@@ -39,6 +39,12 @@ class AnnouncementService:
         
         if announcement.is_active:
             try:
+                logger.info(
+                    f"[NOTIFICATION DEBUG] Starting notification process for announcement {db_announcement.id}. "
+                    f"Gym ID: {announcement.gym_id}, Send To: {announcement.send_to.value}, "
+                    f"Member IDs: {announcement.member_ids if announcement.member_ids else 'None'}"
+                )
+                
                 # Build data payload with dynamic route from data object
                 notification_data = {
                     "announcement_id": db_announcement.id,
@@ -54,7 +60,19 @@ class AnnouncementService:
                 # Map route to 'screen' in FCM notification data
                 notification_data["screen"] = route
                 
+                logger.info(
+                    f"[NOTIFICATION DEBUG] Notification payload prepared. "
+                    f"Title: '{announcement.title}', Body: '{announcement.message[:50]}...', "
+                    f"Data: {notification_data}, Route: {route}"
+                )
+                
                 # Send notifications based on send_to filter
+                logger.info(
+                    f"[NOTIFICATION DEBUG] Calling send_fcm_notification_to_gym_members_by_filter with "
+                    f"gym_id={announcement.gym_id}, send_to={announcement.send_to.value}, "
+                    f"member_ids={announcement.member_ids}"
+                )
+                
                 notification_results = send_fcm_notification_to_gym_members_by_filter(
                     gym_id=announcement.gym_id,
                     title=announcement.title,
@@ -65,9 +83,37 @@ class AnnouncementService:
                     member_ids=announcement.member_ids
                 )
                 
+                logger.info(
+                    f"[NOTIFICATION DEBUG] Notification function returned {len(notification_results)} results"
+                )
+                
                 # Log notification results
                 successful = sum(1 for r in notification_results if r.get("success", False))
+                failed = sum(1 for r in notification_results if not r.get("success", False))
                 total = len(notification_results)
+                
+                logger.info(
+                    f"[NOTIFICATION DEBUG] Notification results breakdown - "
+                    f"Total: {total}, Successful: {successful}, Failed: {failed}"
+                )
+                
+                # Log detailed results for each notification
+                for idx, result in enumerate(notification_results, 1):
+                    if result.get("success", False):
+                        logger.info(
+                            f"[NOTIFICATION DEBUG] Result #{idx} - SUCCESS - "
+                            f"User ID: {result.get('user_id', 'N/A')}, "
+                            f"Device Token: {result.get('device_token', 'N/A')[:20]}..., "
+                            f"Response: {result.get('response', {})}"
+                        )
+                    else:
+                        logger.warning(
+                            f"[NOTIFICATION DEBUG] Result #{idx} - FAILED - "
+                            f"User ID: {result.get('user_id', 'N/A')}, "
+                            f"Device Token: {result.get('device_token', 'N/A')[:20]}..., "
+                            f"Error: {result.get('error', 'Unknown error')}"
+                        )
+                
                 logger.info(
                     f"Announcement {db_announcement.id} created with send_to='{announcement.send_to.value}'. "
                     f"Notifications sent: {successful}/{total} members"
@@ -75,7 +121,8 @@ class AnnouncementService:
             except Exception as e:
                 # Log error but don't fail announcement creation
                 logger.error(
-                    f"Failed to send FCM notifications for announcement {db_announcement.id}: {str(e)}"
+                    f"[NOTIFICATION DEBUG] Exception occurred while sending FCM notifications for announcement {db_announcement.id}: {str(e)}",
+                    exc_info=True
                 )
         
         return AnnouncementResponse.model_validate(db_announcement.model_dump())

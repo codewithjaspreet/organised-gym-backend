@@ -1,11 +1,15 @@
 import os
 import json
+import logging
 import requests
 from pathlib import Path
 from typing import Optional
 from google.oauth2 import service_account
 from google.auth.transport.requests import Request
 from app.core.config import settings
+
+# Setup logger
+logger = logging.getLogger(__name__)
 
 
 # Path to service account file - use from config or default
@@ -80,7 +84,14 @@ def send_fcm_notification(
     Raises:
         Exception: If notification sending fails
     """
+    logger.info(
+        f"[NOTIFICATION DEBUG] Preparing FCM notification - "
+        f"Device Token: {device_token[:20]}..., Title: '{title}', Body: '{body[:50]}...', "
+        f"Data: {data if data else 'None'}"
+    )
+    
     access_token = get_fcm_access_token()
+    logger.debug(f"[NOTIFICATION DEBUG] FCM access token obtained successfully")
     
     payload = {
         "message": {
@@ -102,16 +113,34 @@ def send_fcm_notification(
     }
     
     fcm_url = get_fcm_send_url()
-    response = requests.post(
-        fcm_url,
-        headers=headers,
-        json=payload
-    )
+    logger.info(f"[NOTIFICATION DEBUG] Sending FCM request to: {fcm_url}")
+    logger.debug(f"[NOTIFICATION DEBUG] FCM payload: {json.dumps(payload, indent=2)}")
     
-    # Raise exception if request failed
-    response.raise_for_status()
-    
-    return response.json()
+    try:
+        response = requests.post(
+            fcm_url,
+            headers=headers,
+            json=payload
+        )
+        
+        logger.info(
+            f"[NOTIFICATION DEBUG] FCM API response status: {response.status_code}, "
+            f"Response: {response.text[:200]}"
+        )
+        
+        # Raise exception if request failed
+        response.raise_for_status()
+        
+        response_json = response.json()
+        logger.info(f"[NOTIFICATION DEBUG] FCM notification sent successfully. Response: {response_json}")
+        return response_json
+    except requests.exceptions.RequestException as e:
+        logger.error(
+            f"[NOTIFICATION DEBUG] FCM API request failed - Status: {getattr(e.response, 'status_code', 'N/A')}, "
+            f"Error: {str(e)}, Response: {getattr(e.response, 'text', 'N/A')[:200]}",
+            exc_info=True
+        )
+        raise
 
 
 def send_fcm_notification_to_multiple(
@@ -292,10 +321,13 @@ def send_fcm_notification_to_gym_members_by_filter(
     ]
     
     # Apply filter based on send_to parameter
+    logger.info(f"[NOTIFICATION DEBUG] Applying filter: send_to='{send_to}'")
+    
     if send_to == "All":
         # Get all members
         stmt = select(User).where(and_(*base_conditions))
         members = session.exec(stmt).all()
+        logger.info(f"[NOTIFICATION DEBUG] Filter 'All' found {len(members)} members")
         
     elif send_to == "Pending Fees":
         # Get users with pending payments
@@ -308,7 +340,10 @@ def send_fcm_notification_to_gym_members_by_filter(
         )
         pending_user_ids = [uid for uid in session.exec(pending_user_ids_subquery).all()]
         
+        logger.info(f"[NOTIFICATION DEBUG] Filter 'Pending Fees' found {len(pending_user_ids)} user IDs with pending payments")
+        
         if not pending_user_ids:
+            logger.info(f"[NOTIFICATION DEBUG] No users with pending fees found, returning empty list")
             return []
         
         stmt = select(User).where(
@@ -318,6 +353,7 @@ def send_fcm_notification_to_gym_members_by_filter(
             )
         )
         members = session.exec(stmt).all()
+        logger.info(f"[NOTIFICATION DEBUG] Filter 'Pending Fees' matched {len(members)} members with device tokens")
         
     elif send_to == "Birthday":
         # Get users whose birthday is today
@@ -325,10 +361,12 @@ def send_fcm_notification_to_gym_members_by_filter(
         today = date.today()
         all_members_stmt = select(User).where(and_(*base_conditions))
         all_members = session.exec(all_members_stmt).all()
+        logger.info(f"[NOTIFICATION DEBUG] Filter 'Birthday' checking {len(all_members)} total members")
         members = [
             member for member in all_members
             if member.dob and member.dob.month == today.month and member.dob.day == today.day
         ]
+        logger.info(f"[NOTIFICATION DEBUG] Filter 'Birthday' found {len(members)} members with birthday today")
         
     elif send_to == "Plan Expiring Today":
         # Get users whose membership expires today and is still active
@@ -343,7 +381,10 @@ def send_fcm_notification_to_gym_members_by_filter(
         )
         expiring_user_ids = [uid for uid in session.exec(expiring_user_ids_subquery).all()]
         
+        logger.info(f"[NOTIFICATION DEBUG] Filter 'Plan Expiring Today' found {len(expiring_user_ids)} user IDs")
+        
         if not expiring_user_ids:
+            logger.info(f"[NOTIFICATION DEBUG] No members with plan expiring today found, returning empty list")
             return []
         
         stmt = select(User).where(
@@ -353,6 +394,7 @@ def send_fcm_notification_to_gym_members_by_filter(
             )
         )
         members = session.exec(stmt).all()
+        logger.info(f"[NOTIFICATION DEBUG] Filter 'Plan Expiring Today' matched {len(members)} members with device tokens")
         
     elif send_to == "Plan Expiring in 3 days":
         # Get users whose membership expires in 3 days and is still active
@@ -368,7 +410,10 @@ def send_fcm_notification_to_gym_members_by_filter(
         )
         expiring_user_ids = [uid for uid in session.exec(expiring_user_ids_subquery).all()]
         
+        logger.info(f"[NOTIFICATION DEBUG] Filter 'Plan Expiring in 3 days' found {len(expiring_user_ids)} user IDs")
+        
         if not expiring_user_ids:
+            logger.info(f"[NOTIFICATION DEBUG] No members with plan expiring in 3 days found, returning empty list")
             return []
         
         stmt = select(User).where(
@@ -378,10 +423,14 @@ def send_fcm_notification_to_gym_members_by_filter(
             )
         )
         members = session.exec(stmt).all()
+        logger.info(f"[NOTIFICATION DEBUG] Filter 'Plan Expiring in 3 days' matched {len(members)} members with device tokens")
         
     elif send_to == "Specific Members":
         # Get specific members by their IDs
+        logger.info(f"[NOTIFICATION DEBUG] Filter 'Specific Members' requested for {len(member_ids) if member_ids else 0} member IDs")
+        
         if not member_ids:
+            logger.info(f"[NOTIFICATION DEBUG] No member_ids provided for 'Specific Members' filter, returning empty list")
             return []
         
         # Verify all member_ids belong to the gym
@@ -392,20 +441,33 @@ def send_fcm_notification_to_gym_members_by_filter(
             )
         )
         members = session.exec(stmt).all()
+        logger.info(f"[NOTIFICATION DEBUG] Filter 'Specific Members' matched {len(members)} members with device tokens out of {len(member_ids)} requested")
         
     else:
         # Invalid send_to value, return empty
+        logger.warning(f"[NOTIFICATION DEBUG] Invalid send_to value: '{send_to}', returning empty list")
         return []
     
     if not members:
+        logger.info(f"[NOTIFICATION DEBUG] No members found after applying filter, returning empty list")
         return []
+    
+    logger.info(f"[NOTIFICATION DEBUG] Starting to send notifications to {len(members)} members")
     
     # Send notifications and include user_id in results
     results = []
-    for member in members:
+    for idx, member in enumerate(members, 1):
         if member.device_token:
+            logger.info(
+                f"[NOTIFICATION DEBUG] Sending notification #{idx}/{len(members)} to user_id={member.id}, "
+                f"device_token={member.device_token[:20]}..."
+            )
             try:
                 result = send_fcm_notification(member.device_token, title, body, data)
+                logger.info(
+                    f"[NOTIFICATION DEBUG] Notification #{idx} SUCCESS for user_id={member.id}. "
+                    f"FCM Response: {result}"
+                )
                 results.append({
                     "user_id": member.id,
                     "device_token": member.device_token,
@@ -413,11 +475,19 @@ def send_fcm_notification_to_gym_members_by_filter(
                     "response": result
                 })
             except Exception as e:
+                logger.error(
+                    f"[NOTIFICATION DEBUG] Notification #{idx} FAILED for user_id={member.id}. "
+                    f"Error: {str(e)}",
+                    exc_info=True
+                )
                 results.append({
                     "user_id": member.id,
                     "device_token": member.device_token,
                     "success": False,
                     "error": str(e)
                 })
+        else:
+            logger.warning(f"[NOTIFICATION DEBUG] Member {member.id} has no device_token, skipping")
     
+    logger.info(f"[NOTIFICATION DEBUG] Completed sending notifications. Total results: {len(results)}")
     return results
