@@ -7,11 +7,13 @@ from .billing import router as billing_router
 from .attendance import router as attendance_router
 from .announcements import router as announcements_router
 from .bank_accounts import router as bank_accounts_router
+from .app_info import router as app_info_router
 
 router = APIRouter()
 
 router.include_router(auth_router)
 router.include_router(bank_accounts_router)
+router.include_router(app_info_router)
 # router.include_router(gyms_router)
 # router.include_router(plans_router)
 # router.include_router(memberships_router)
