@@ -1,5 +1,7 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, status, File, UploadFile, Form
 from sqlmodel import select
+from typing import Optional
+import time
 from app.core.permissions import require_any_authenticated, require_admin
 from app.db.db import SessionDep
 from app.models.user import User
@@ -13,6 +15,7 @@ from app.schemas.bank_account import (
 )
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
+from app.utils.cloudinary import get_cloudinary_service
 from app.services.bank_account_service import BankAccountService
 from app.core.exceptions import NotFoundError
 
@@ -95,15 +98,49 @@ def get_bank_account(
 
 
 @router.post("/", response_model=APIResponse[BankAccountResponse], status_code=status.HTTP_201_CREATED)
-def create_bank_account(
-    bank_account: BankAccountCreate,
+async def create_bank_account(
+    account_holder_name: str = Form(..., description="The account holder's name"),
+    bank_name: str = Form(..., description="The bank name"),
+    account_number: str = Form(..., description="The bank account number"),
+    ifsc_code: str = Form(..., description="The IFSC code"),
+    upi_id: Optional[str] = Form(None, description="The UPI ID"),
+    qr_code_file: Optional[UploadFile] = File(None, description="The QR code image file"),
     session: SessionDep = None,
     current_user: User = require_admin  # Only owners can create bank accounts
 ):
-    """Create a new bank account for the owner's gym"""
+    """Create a new bank account for the owner's gym with optional QR code upload"""
     bank_account_service = BankAccountService(session=session)
     try:
         gym_id = get_user_gym_id(current_user, session)
+        
+        # Handle QR code file upload if present
+        qr_code_url = None
+        if qr_code_file and qr_code_file.filename:
+            cloudinary_service = get_cloudinary_service()
+            try:
+                qr_code_url = await cloudinary_service.upload_image(
+                    file=qr_code_file,
+                    folder=f"bank_accounts/{gym_id}",
+                    public_id=f"qr_code_{gym_id}_{int(time.time())}",
+                    optimize=True
+                )
+            except Exception as e:
+                return failure_response(
+                    message=f"Failed to upload QR code: {str(e)}",
+                    data=None,
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Create bank account data object
+        bank_account = BankAccountCreate(
+            account_holder_name=account_holder_name,
+            bank_name=bank_name,
+            account_number=account_number,
+            ifsc_code=ifsc_code,
+            upi_id=upi_id,
+            qr_code_url=qr_code_url
+        )
+        
         bank_account_data = bank_account_service.create_bank_account(
             gym_id=gym_id,
             bank_account=bank_account

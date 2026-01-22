@@ -9,6 +9,7 @@ class BankAccountCreate(BaseModel):
     account_number: str = Field(description="The bank account number", min_length=1)
     ifsc_code: str = Field(description="The IFSC code", min_length=1)
     upi_id: Optional[str] = Field(description="The UPI ID", default=None)
+    qr_code_url: Optional[str] = Field(description="The QR code URL", default=None)
 
 
 class BankAccountUpdate(BaseModel):
@@ -17,6 +18,7 @@ class BankAccountUpdate(BaseModel):
     account_number: Optional[str] = Field(default=None, description="The bank account number")
     ifsc_code: Optional[str] = Field(default=None, description="The IFSC code")
     upi_id: Optional[str] = Field(default=None, description="The UPI ID")
+    qr_code_url: Optional[str] = Field(default=None, description="The QR code URL")
 
 
 class BankAccountResponse(BaseModel):
@@ -28,6 +30,7 @@ class BankAccountResponse(BaseModel):
     account_number: str
     ifsc_code: str
     upi_id: Optional[str] = None
+    qr_code_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
