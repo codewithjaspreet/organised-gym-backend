@@ -92,12 +92,13 @@ def get_all_members(
 
 @router.get("/pending-payments", response_model=APIResponse[PendingPaymentListResponse], status_code=status.HTTP_200_OK)
 def get_pending_payments(
+    filter_status: Optional[str] = Query("pending", description="Filter by status: all, approved, rejected, pending"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Number of items per page"),
     session: SessionDep = None,
     current_user: User = require_admin
 ):
-    """Get all pending payments for approval with pagination"""
+    """Get payments for approval with pagination and status filtering"""
     gym = get_owner_gym(current_user, session)
     if not gym:
         return failure_response(
@@ -109,13 +110,14 @@ def get_pending_payments(
     payment_service = PaymentService(session=session)
     pending_payments = payment_service.get_pending_payments(
         gym_id=gym.id,
+        filter_status=filter_status,
         page=page,
         page_size=page_size
     )
     
     return success_response(
         data=pending_payments,
-        message="Pending payments fetched successfully"
+        message="Payments fetched successfully"
     )
 
 

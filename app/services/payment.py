@@ -222,29 +222,54 @@ class PaymentService:
     def get_pending_payments(
         self,
         gym_id: str,
+        filter_status: str = "pending",
         page: int = 1,
         page_size: int = 20
     ) -> PendingPaymentListResponse:
         """
-        Get all pending payments for a gym with pagination.
+        Get payments for a gym with pagination and status filtering.
         Returns payment details with member's current plan information.
+        
+        Args:
+            gym_id: Gym ID
+            filter_status: Filter by status - "all", "approved", "rejected", or "pending" (default)
+            page: Page number
+            page_size: Items per page
         """
         from app.models.user import User
         
-        # Base query: all pending payments for the gym
-        stmt = select(Payment).where(
-            and_(
+        # Build status filter condition
+        status_conditions = []
+        if filter_status == "all":
+            # No status filter - get all payments
+            status_conditions = [Payment.gym_id == gym_id]
+        elif filter_status == "approved":
+            # Get verified/approved payments
+            status_conditions = [
+                Payment.gym_id == gym_id,
+                Payment.status == "verified"
+            ]
+        elif filter_status == "rejected":
+            # Get rejected payments
+            status_conditions = [
+                Payment.gym_id == gym_id,
+                Payment.status == "rejected"
+            ]
+        else:
+            # Default: pending payments
+            status_conditions = [
                 Payment.gym_id == gym_id,
                 Payment.status == "pending"
-            )
+            ]
+        
+        # Base query: payments for the gym with status filter
+        stmt = select(Payment).where(
+            and_(*status_conditions)
         ).order_by(Payment.created_at.desc())
         
         # Get total count
         count_stmt = select(func.count(Payment.id)).where(
-            and_(
-                Payment.gym_id == gym_id,
-                Payment.status == "pending"
-            )
+            and_(*status_conditions)
         )
         total = self.session.exec(count_stmt).first() or 0
         
