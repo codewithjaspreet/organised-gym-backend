@@ -30,9 +30,10 @@ class OGPlan(SQLModel, table=True):
     billing_cycle: BillingCycle = Field(description="The billing cycle")
     max_members: int = Field(description="Maximum number of members", ge=0)
     max_staff: int = Field(description="Maximum number of staff", ge=0)
-    features: Dict[str, Any] = Field(
+    features: Optional[Dict[str, Any]] = Field(
         description="The plan features",
-        sa_column=Column(SA_JSON)
+        sa_column=Column(SA_JSON, nullable=True),
+        default=None
     )
     is_active: bool = Field(
         description="Whether the plan is active",

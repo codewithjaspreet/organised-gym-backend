@@ -2,7 +2,7 @@ from fastapi import APIRouter, status, Depends
 from app.core.permissions import require_og
 from app.db.db import SessionDep
 from app.models.user import User
-from app.schemas.og_plan import OGPlanCreate, OGPlanResponse, OGPlanUpdate
+from app.schemas.og_plan import OGPlanCreate, OGPlanResponse, OGPlanUpdate, OGPlanListResponse
 from app.schemas.response import APIResponse
 from app.utils.response import success_response
 from app.services.og_plan_service import OGPlanService
@@ -18,6 +18,16 @@ def create_og_plan(
     og_plan_service = OGPlanService(session=session)
     og_plan_data = og_plan_service.create_og_plan(og_plan)
     return success_response(data=og_plan_data, message="OG plan created successfully")
+
+@router.get("/", response_model=APIResponse[OGPlanListResponse])
+def get_all_og_plans(
+    session: SessionDep,
+    current_user: User = require_og
+):
+    """Get all OG plans"""
+    og_plan_service = OGPlanService(session=session)
+    og_plans_data = og_plan_service.get_all_og_plans()
+    return success_response(data=og_plans_data, message="OG plans fetched successfully")
 
 @router.get("/{og_plan_id}", response_model=APIResponse[OGPlanResponse])
 def get_og_plan(

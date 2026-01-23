@@ -1,7 +1,7 @@
 from fastapi import APIRouter, status
 from sqlmodel import select
 from datetime import datetime
-from app.core.permissions import require_any_authenticated, require_og
+from app.core.permissions import require_og
 from app.db.db import SessionDep
 from app.models.user import User
 from app.models.app_info import AppInfo
@@ -15,10 +15,9 @@ router = APIRouter(prefix="/app-info", tags=["app-info"])
 
 @router.get("/", response_model=APIResponse[AppInfoResponse], status_code=status.HTTP_200_OK)
 def get_app_info(
-    session: SessionDep = None,
-    current_user: User = require_any_authenticated
+    session: SessionDep = None
 ):
-    """Get app information (version and maintenance mode status) - accessible by all roles"""
+    """Get app information (version and maintenance mode status) - publicly accessible, no authentication required"""
     # Get the first app_info record (or default one)
     stmt = select(AppInfo).limit(1)
     app_info = session.exec(stmt).first()

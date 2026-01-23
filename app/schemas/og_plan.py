@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field
 from app.models.og_plan import BillingCycle
 
@@ -11,7 +11,7 @@ class OGPlanCreate(BaseModel):
     billing_cycle: BillingCycle = Field(description="The billing cycle")
     max_members: int = Field(description="Maximum number of members", ge=0)
     max_staff: int = Field(description="Maximum number of staff", ge=0)
-    features: Dict[str, Any] = Field(description="The plan features")
+    features: Optional[Dict[str, Any]] = Field(default=None, description="The plan features")
     is_active: bool = Field(description="Whether the plan is active", default=True)
 
 
@@ -32,7 +32,11 @@ class OGPlanResponse(BaseModel):
     billing_cycle: BillingCycle
     max_members: int
     max_staff: int
-    features: Dict[str, Any]
+    features: Optional[Dict[str, Any]] = None
     is_active: bool
     created_at: datetime
+
+
+class OGPlanListResponse(BaseModel):
+    og_plans: List[OGPlanResponse] = Field(description="List of OG plans")
 

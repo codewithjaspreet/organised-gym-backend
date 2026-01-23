@@ -25,6 +25,7 @@ class GymCreate(BaseModel):
     facebook: Optional[str] = Field(description="The gym's Facebook page URL", default=None)
     youtube: Optional[str] = Field(description="The gym's YouTube channel URL", default=None)
     twitter: Optional[str] = Field(description="The gym's Twitter handle/URL", default=None)
+    og_plan_id: str = Field(description="The OG plan id to assign to this gym (mandatory for platform admin)")
 
 
 class GymUpdate(BaseModel):
@@ -49,6 +50,7 @@ class GymUpdate(BaseModel):
     facebook: Optional[str] = Field(default=None, description="The gym's Facebook page URL")
     youtube: Optional[str] = Field(default=None, description="The gym's YouTube channel URL")
     twitter: Optional[str] = Field(default=None, description="The gym's Twitter handle/URL")
+    og_plan_id: Optional[str] = Field(default=None, description="The OG plan id to assign/update for this gym (optional)")
 
 
 class GymResponse(BaseModel):
