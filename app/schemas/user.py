@@ -63,6 +63,14 @@ class CurrentPlanResponse(BaseModel):
     status: str
     days_left: int
 
+class OGPlanInfoResponse(BaseModel):
+    """OG Plan information for gym subscription"""
+    og_plan_id: Optional[str] = None
+    og_plan_name: Optional[str] = None
+    og_plan_end_date: Optional[str] = None
+    og_plan_status: Optional[str] = None
+
+
 class UserResponse(BaseModel):
     id: str
     user_name: str
@@ -77,6 +85,7 @@ class UserResponse(BaseModel):
     plan_id: Optional[str] = None
     plan_amount: Optional[Decimal] = None
     current_plan: Optional[CurrentPlanResponse] = None
+    og_plan: Optional[OGPlanInfoResponse] = None
     role_id: str
     role_name: Optional[str] = None
     city: str

@@ -1,18 +1,105 @@
 from fastapi import HTTPException, status, Depends
 from typing import List
-from sqlmodel import select, Session
+from sqlmodel import select, Session, and_, or_
+from datetime import date
 from app.core.dependencies import get_current_user, get_session
-from app.models.user import User, RoleEnum
+from datetime import date
+from fastapi import Depends, HTTPException, status
+from sqlmodel import select, and_
+from app.models.gym import Gym
+from app.models.gym_subscription import GymSubscription, SubscriptionStatus
 from app.models.role import Role
+from app.models.user import RoleEnum, User
+from datetime import date
+from fastapi import Depends, HTTPException, status
+from sqlmodel import select, and_
+
+from app.utils.fcm_notification import logger
+
+async def get_current_active_user(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+) -> User:
+
+    logger.error(
+        f"AUTH DEBUG | user_id={current_user.id} | "
+        f"role_id={getattr(current_user, 'role_id', None)} | "
+        f"user_dict={current_user.__dict__}"
+    )
 
 
-async def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
-    """Ensure the user is active"""
+    logger.info(
+        f"Auth check started | user_id={current_user.id} | "
+        f"role_id={current_user.role_id} | path=protected"
+    )
+
     if not current_user.is_active:
+        logger.warning(f"User inactive | user_id={current_user.id}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Inactive user"
         )
+
+    if current_user.role_id:
+        role = session.get(Role, current_user.role_id)
+        logger.info(
+            f"User role resolved | user_id={current_user.id} | role={role.name if role else None}"
+        )
+
+        if role and role.name in {
+            RoleEnum.OG.value,
+            "PLATFORM_ADMIN",
+            "OG",
+        }:
+            logger.info(
+                f"Bypassing subscription checks for platform admin | user_id={current_user.id}"
+            )
+            return current_user
+
+    gym_id = current_user.gym_id
+    logger.info(f"Initial gym_id | user_id={current_user.id} | gym_id={gym_id}")
+
+    if not gym_id:
+        gym = session.exec(
+            select(Gym).where(Gym.owner_id == current_user.id)
+        ).first()
+        gym_id = gym.id if gym else None
+        logger.info(
+            f"Gym resolved via ownership | user_id={current_user.id} | gym_id={gym_id}"
+        )
+
+    # 4️⃣ Subscription check
+    if gym_id:
+        today = date.today()
+        logger.info(
+            f"Checking subscription | gym_id={gym_id} | date={today}"
+        )
+
+        active_subscription = session.exec(
+            select(GymSubscription)
+            .where(
+                and_(
+                    GymSubscription.gym_id == gym_id,
+                    GymSubscription.status == SubscriptionStatus.ACTIVE,
+                    GymSubscription.end_date >= today,
+                )
+            )
+            .order_by(GymSubscription.end_date.desc())
+        ).first()
+
+        if not active_subscription:
+            logger.error(
+                f"OG plan expired or missing | user_id={current_user.id} | gym_id={gym_id}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "errorCode": "OG_PLAN_INACTIVE",
+                    "message": "Your gym's OG plan has expired"
+                }
+            )
+
+    logger.info(f"Auth success | user_id={current_user.id}")
     return current_user
 
 

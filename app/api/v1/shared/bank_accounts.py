@@ -158,13 +158,19 @@ async def create_bank_account(
 
 
 @router.put("/{bank_account_id}", response_model=APIResponse[BankAccountResponse], status_code=status.HTTP_200_OK)
-def update_bank_account(
+async def update_bank_account(
     bank_account_id: str,
-    bank_account_update: BankAccountUpdate,
+    account_holder_name: Optional[str] = Form(None, description="The account holder's name"),
+    bank_name: Optional[str] = Form(None, description="The bank name"),
+    account_number: Optional[str] = Form(None, description="The bank account number"),
+    ifsc_code: Optional[str] = Form(None, description="The IFSC code"),
+    upi_id: Optional[str] = Form(None, description="The UPI ID"),
+    qr_code_file: Optional[UploadFile] = File(None, description="The QR code image file (upload to Cloudinary)"),
+    qr_code_url: Optional[str] = Form(None, description="The QR code URL (direct URL, alternative to file upload)"),
     session: SessionDep = None,
     current_user: User = require_admin  # Only owners can update bank accounts
 ):
-    """Update a bank account (only if it belongs to the owner's gym)"""
+    """Update a bank account (only if it belongs to the owner's gym) with optional QR code upload or URL"""
     # Get owner's gym_id
     gym_id = get_user_gym_id(current_user, session)
     
@@ -181,6 +187,46 @@ def update_bank_account(
             data=None,
             status_code=status.HTTP_404_NOT_FOUND
         )
+    
+    # Handle QR code - prioritize file upload over direct URL
+    final_qr_code_url = None
+    if qr_code_file and qr_code_file.filename:
+        # Upload file to Cloudinary
+        cloudinary_service = get_cloudinary_service()
+        try:
+            final_qr_code_url = await cloudinary_service.upload_image(
+                file=qr_code_file,
+                folder=f"bank_accounts/{gym_id}",
+                public_id=f"qr_code_{bank_account_id}_{int(time.time())}",
+                optimize=True
+            )
+        except Exception as e:
+            return failure_response(
+                message=f"Failed to upload QR code: {str(e)}",
+                data=None,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+    elif qr_code_url:
+        # Use direct URL if provided
+        final_qr_code_url = qr_code_url
+    
+    # Build update data
+    update_data = {}
+    if account_holder_name is not None:
+        update_data["account_holder_name"] = account_holder_name
+    if bank_name is not None:
+        update_data["bank_name"] = bank_name
+    if account_number is not None:
+        update_data["account_number"] = account_number
+    if ifsc_code is not None:
+        update_data["ifsc_code"] = ifsc_code
+    if upi_id is not None:
+        update_data["upi_id"] = upi_id
+    if final_qr_code_url is not None:
+        update_data["qr_code_url"] = final_qr_code_url
+    
+    # Create update object
+    bank_account_update = BankAccountUpdate(**update_data)
     
     bank_account_service = BankAccountService(session=session)
     try:

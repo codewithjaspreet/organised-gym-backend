@@ -1,12 +1,12 @@
 from fastapi import APIRouter, status, Query
-from sqlmodel import select
+from sqlmodel import select, and_
 from typing import Optional, List
 from app.core.permissions import require_admin, require_any_authenticated
 from app.db.db import SessionDep
 from app.models.user import User, RoleEnum
 from app.models.gym import Gym
 from app.models.role import Role
-from app.schemas.user import UserResponse, MemberListResponse, MemberDetailResponse, AvailableMembersListResponse
+from app.schemas.user import UserResponse, MemberListResponse, MemberDetailResponse, AvailableMembersListResponse, OGPlanInfoResponse
 from app.schemas.gym import GymResponse
 from app.schemas.plan import PlanResponse, PlanListResponse
 from app.schemas.gym_rule import GymRuleResponse, GymRuleListResponse
@@ -38,6 +38,66 @@ def get_owner_gym(current_user: User, session: SessionDep) -> Optional[Gym]:
     return gym
 
 
+def _get_user_role_name(current_user: User, session: SessionDep) -> str:
+    """Get the role name for a user from their role_id"""
+    if not current_user.role_id:
+        return ""
+    stmt = select(Role).where(Role.id == current_user.role_id)
+    role = session.exec(stmt).first()
+    if not role:
+        return ""
+    return role.name
+
+
+def get_user_gym_id(user: User, session: SessionDep) -> Optional[str]:
+    """Get gym_id for the user (member gets their gym, owner gets their owned gym)"""
+    if user.gym_id:
+        return user.gym_id
+    
+    # If user is owner/admin, get their owned gym
+    gym = get_owner_gym(user, session)
+    if gym:
+        return gym.id
+    
+    return None
+
+
+def get_active_og_plan_for_gym(gym_id: str, session: SessionDep) -> Optional[OGPlanInfoResponse]:
+    """Get active OG Plan information for a gym"""
+    from app.models.gym_subscription import GymSubscription, SubscriptionStatus
+    
+    if not gym_id:
+        return None
+    
+    today = date.today()
+    subscription_stmt = select(GymSubscription).where(
+        and_(
+            GymSubscription.gym_id == gym_id,
+            GymSubscription.status == SubscriptionStatus.ACTIVE,
+            GymSubscription.end_date >= today
+        )
+    ).order_by(GymSubscription.end_date.desc())
+    active_subscription = session.exec(subscription_stmt).first()
+    
+    if not active_subscription:
+        return None
+    
+    # Get OG Plan details
+    from app.models.og_plan import OGPlan
+    og_plan_stmt = select(OGPlan).where(OGPlan.id == active_subscription.og_plan_id)
+    og_plan = session.exec(og_plan_stmt).first()
+    
+    if not og_plan:
+        return None
+    
+    return OGPlanInfoResponse(
+        og_plan_id=og_plan.id,
+        og_plan_name=og_plan.name,
+        og_plan_end_date=active_subscription.end_date.isoformat(),
+        og_plan_status=active_subscription.status.value
+    )
+
+
 @router.get("/profile", response_model=APIResponse[UserResponse], status_code=status.HTTP_200_OK)
 def get_profile(
     session: SessionDep = None,
@@ -54,6 +114,14 @@ def get_profile(
     # Update gym_id if gym exists (for owners/admins)
     if gym:
         user_data.gym_id = gym.id
+    
+    # Get OG Plan details only for ADMIN role (gym owners)
+    user_role_name = _get_user_role_name(current_user, session)
+    if user_role_name == RoleEnum.ADMIN.value:
+        gym_id = get_user_gym_id(current_user, session)
+        if gym_id:
+            og_plan_info = get_active_og_plan_for_gym(gym_id, session)
+            user_data.og_plan = og_plan_info
     
     return success_response(data=user_data, message="Profile fetched successfully")
 

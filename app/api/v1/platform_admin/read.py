@@ -4,7 +4,7 @@ from app.db.db import SessionDep
 from app.models.user import User
 from app.schemas.user import UserResponse
 from app.schemas.gym import GymResponse
-from app.schemas.og_plan import OGPlanResponse
+from app.schemas.og_plan import OGPlanResponse, OGPlanListResponse
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
 from app.services.user_service import UserService
@@ -43,6 +43,17 @@ def get_gym(
     gym_service = GymService(session=session)
     gym_data = gym_service.get_gym(gym_id)
     return success_response(data=gym_data, message="Gym data fetched successfully")
+
+
+@router.get("/og-plans", response_model=APIResponse[OGPlanListResponse])
+def get_all_og_plans(
+    session: SessionDep = None,
+    current_user: User = require_og
+):
+    """Get all OG plans"""
+    og_plan_service = OGPlanService(session=session)
+    og_plans_data = og_plan_service.get_all_og_plans()
+    return success_response(data=og_plans_data, message="OG plans fetched successfully")
 
 
 @router.get("/og-plans/{og_plan_id}", response_model=APIResponse[OGPlanResponse])
