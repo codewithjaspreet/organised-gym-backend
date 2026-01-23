@@ -30,11 +30,11 @@ class BankAccountResponse(BaseModel):
     account_number: str
     ifsc_code: str
     upi_id: Optional[str] = None
-    qr_code_url: Optional[str] = None
+    qr_code_file: Optional[str] = Field(default=None, alias="qr_code_url", description="The QR code URL")
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class BankAccountListResponse(BaseModel):
