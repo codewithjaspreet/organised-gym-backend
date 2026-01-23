@@ -357,6 +357,14 @@ class PaymentService:
             user = users_by_id.get(payment.user_id)
             user_name = user.user_name if user else ""
             
+            # Map payment status to response status
+            if payment.status == "verified":
+                payment_status = "approved"
+            elif payment.status == "rejected":
+                payment_status = "rejected"
+            else:
+                payment_status = "pending"
+            
             # Note: remarks is not stored in Payment model, so returning None
             pending_payments.append(PendingPaymentResponse(
                 payment_id=payment.id,
@@ -365,7 +373,8 @@ class PaymentService:
                 proof_url=payment.proof_url,
                 remarks=None,  # Remarks not stored in Payment model currently
                 payment_at=payment_at_str,
-                current_plan=current_plan
+                current_plan=current_plan,
+                status=payment_status
             ))
         
         has_next = (page * page_size) < total

@@ -60,6 +60,7 @@ class PendingPaymentResponse(BaseModel):
     remarks: Optional[str] = Field(default=None, description="Payment remarks/notes")
     payment_at: str = Field(description="Payment creation date and time in Indian format (DD-MM-YYYY HH:MM:SS)")
     current_plan: Optional[CurrentPlanResponse] = Field(default=None, description="Current plan information for the member")
+    status: str = Field(description="Payment status: approved, rejected, or pending")
 
 
 class PendingPaymentListResponse(BaseModel):

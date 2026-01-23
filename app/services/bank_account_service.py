@@ -45,7 +45,7 @@ class BankAccountService:
         self.session.commit()
         self.session.refresh(db_bank_account)
 
-        return BankAccountResponse.model_validate(db_bank_account.model_dump())
+        return BankAccountResponse.model_validate(db_bank_account, from_attributes=True)
 
     def get_bank_account(self, bank_account_id: str) -> BankAccountResponse:
         """Get a bank account by ID"""
@@ -54,7 +54,7 @@ class BankAccountService:
         if not bank_account:
             raise NotFoundError(detail=f"Bank account with id {bank_account_id} not found")
 
-        return BankAccountResponse.model_validate(bank_account.model_dump())
+        return BankAccountResponse.model_validate(bank_account, from_attributes=True)
 
     def get_gym_bank_accounts(self, gym_id: str) -> BankAccountListResponse:
         """Get all bank accounts for a gym"""
@@ -68,7 +68,7 @@ class BankAccountService:
         bank_accounts = self.session.exec(stmt).all()
 
         bank_account_responses = [
-            BankAccountResponse.model_validate(account.model_dump())
+            BankAccountResponse.model_validate(account, from_attributes=True)
             for account in bank_accounts
         ]
 
@@ -96,7 +96,7 @@ class BankAccountService:
         self.session.commit()
         self.session.refresh(bank_account)
 
-        return BankAccountResponse.model_validate(bank_account.model_dump())
+        return BankAccountResponse.model_validate(bank_account, from_attributes=True)
 
     def delete_bank_account(self, bank_account_id: str) -> None:
         """Delete a bank account"""
