@@ -3,9 +3,12 @@ __pycache__/
 *.py[oc]
 build/
 dist/
+temp_auto_push.bat
 wheels/
 *.egg-info
 firebase/
 # Virtual environments
 .venv
 .env
+.gitignore
+branch_structure.json
