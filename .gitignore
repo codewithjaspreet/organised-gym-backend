@@ -4,6 +4,7 @@ __pycache__/
 build/
 dist/
 wheels/
+.github/
 *.egg-info
 firebase/
 # Virtual environments
