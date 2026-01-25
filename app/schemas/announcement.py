@@ -1,7 +1,8 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from enum import Enum
-from pydantic import BaseModel, Field
+from zoneinfo import ZoneInfo
+from pydantic import BaseModel, Field, field_serializer
 
 
 class SendToType(str, Enum):
@@ -37,6 +38,17 @@ class AnnouncementResponse(BaseModel):
     gym_id: str = Field(description="The gym id")
     created_at: datetime = Field(description="The announcement creation date")
     updated_at: Optional[datetime] = Field(description="The announcement update date", default=None)
+
+    @field_serializer("created_at", "updated_at")
+    def serialize_datetime_to_ist(self, value: Optional[datetime], _info) -> Optional[datetime]:
+        """Convert naive UTC datetimes to Asia/Kolkata (IST) for API response."""
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc).astimezone(ZoneInfo("Asia/Kolkata"))
+        else:
+            value = value.astimezone(ZoneInfo("Asia/Kolkata"))
+        return value
 
 
 class AnnouncementListResponse(BaseModel):
