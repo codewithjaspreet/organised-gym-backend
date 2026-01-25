@@ -38,7 +38,7 @@ class UserCreate(BaseModel):
         return v
 
 class UserUpdate(BaseModel):
-    name: Optional[str] = None
+    # name: intentionally excluded — not updatable (owner cannot change member name)
     email: Optional[str] = None
     phone: Optional[str] = None
     gender: Optional[Gender] = None

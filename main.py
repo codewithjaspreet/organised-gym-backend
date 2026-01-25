@@ -13,6 +13,7 @@ from app.core import config
 from contextlib import asynccontextmanager
 from app.db.db import create_db_and_tables
 from app.schemas.response import APIResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 
 @asynccontextmanager
@@ -24,9 +25,16 @@ async def on_startup(application: FastAPI):
 @lru_cache()
 def get_settings():
     return config.settings
+origins=["*"]
 
 app = FastAPI(title=config.settings.app_name, lifespan=on_startup)
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Include role-based routers
 app.include_router(owners_router, prefix="/api/v1")

@@ -6,8 +6,15 @@ from pathlib import Path
 from typing import Optional
 from google.oauth2 import service_account
 from google.auth.transport.requests import Request
+from app.models.role import Role
 from app.core.config import settings
-
+from app.models.membership import Membership
+from app.models.payments import Payment
+from app.models.user import User
+from app.schemas.announcement import SendToType
+from typing import Optional
+from datetime import date, timedelta
+from sqlmodel import select, and_, func
 # Setup logger
 logger = logging.getLogger(__name__)
 
@@ -300,10 +307,9 @@ def send_fcm_notification_to_gym_members(
     
     from sqlmodel import select
     from app.models.user import User
-    from app.models.role import Role as RoleModel
-    
+
     # Get MEMBER role
-    member_role_stmt = select(RoleModel).where(RoleModel.name == "MEMBER")
+    member_role_stmt = select(Role).where(Role.name == "MEMBER")
     member_role = session.exec(member_role_stmt).first()
     
     if not member_role:
@@ -325,224 +331,139 @@ def send_fcm_notification_to_gym_members(
     
     return send_fcm_notification_to_multiple(device_tokens, title, body, data)
 
-
 def send_fcm_notification_to_gym_members_by_filter(
     gym_id: str,
     title: str,
     body: str,
-    send_to: str,
+    send_to: SendToType,
     data: Optional[dict] = None,
-    session = None,
+    session=None,
     member_ids: Optional[list[str]] = None
 ) -> list[dict]:
-    """
-    Send FCM notification to gym members based on send_to filter.
-    
-    Args:
-        gym_id: Gym ID
-        title: Notification title
-        body: Notification body/message
-        send_to: Filter type - "All", "Pending Fees", "Birthday", "Plan Expiring Today", "Plan Expiring in 3 days", "Specific Members"
-        data: Optional additional data payload
-        session: Database session (required)
-        member_ids: Optional list of member user IDs (required when send_to is "Specific Members")
-        
-    Returns:
-        list[dict]: List of results for each member with user_id included
-    """
     if not session:
         raise ValueError("Database session is required")
-    
-    from sqlmodel import select, and_, or_, func
-    from datetime import date, timedelta
-    from app.models.user import User
-    from app.models.role import Role as RoleModel
-    from app.models.membership import Membership
-    from app.models.payments import Payment
-    
+
     # Get MEMBER role
-    member_role_stmt = select(RoleModel).where(RoleModel.name == "MEMBER")
-    member_role = session.exec(member_role_stmt).first()
-    
+    member_role = session.exec(
+        select(Role).where(Role.name == "MEMBER")
+    ).first()
+
     if not member_role:
         return []
-    
-    # Base query for active members with device tokens
+
     base_conditions = [
         User.gym_id == gym_id,
         User.role_id == member_role.id,
         User.device_token.isnot(None),
         User.is_active == True
     ]
-    
-    # Apply filter based on send_to parameter
-    logger.info(f"[NOTIFICATION DEBUG] Applying filter: send_to='{send_to}'")
-    
-    if send_to == "All":
-        # Get all members
-        stmt = select(User).where(and_(*base_conditions))
-        members = session.exec(stmt).all()
-        logger.info(f"[NOTIFICATION DEBUG] Filter 'All' found {len(members)} members")
-        
-    elif send_to == "Pending Fees":
-        # Get users with pending payments
-        today = date.today()
-        pending_user_ids_subquery = select(func.distinct(Payment.user_id)).where(
-            and_(
-                Payment.gym_id == gym_id,
-                Payment.status == "pending"
+
+    members: list[User] = []
+
+    if send_to == SendToType.ALL:
+        members = session.exec(
+            select(User).where(and_(*base_conditions))
+        ).all()
+
+    elif send_to == SendToType.PENDING_FEES:
+        pending_user_ids = session.exec(
+            select(func.distinct(Payment.user_id)).where(
+                and_(
+                    Payment.gym_id == gym_id,
+                    Payment.status == "pending"
+                )
             )
-        )
-        pending_user_ids = [uid for uid in session.exec(pending_user_ids_subquery).all()]
-        
-        logger.info(f"[NOTIFICATION DEBUG] Filter 'Pending Fees' found {len(pending_user_ids)} user IDs with pending payments")
-        
-        if not pending_user_ids:
-            logger.info(f"[NOTIFICATION DEBUG] No users with pending fees found, returning empty list")
-            return []
-        
-        stmt = select(User).where(
-            and_(
-                *base_conditions,
-                User.id.in_(pending_user_ids)
-            )
-        )
-        members = session.exec(stmt).all()
-        logger.info(f"[NOTIFICATION DEBUG] Filter 'Pending Fees' matched {len(members)} members with device tokens")
-        
-    elif send_to == "Birthday":
-        # Get users whose birthday is today
-        # Fetch all members and filter by birthday in Python for cross-database compatibility
+        ).all()
+
+        if pending_user_ids:
+            members = session.exec(
+                select(User).where(
+                    and_(*base_conditions, User.id.in_(pending_user_ids))
+                )
+            ).all()
+
+    elif send_to == SendToType.BIRTHDAY:
         today = date.today()
-        all_members_stmt = select(User).where(and_(*base_conditions))
-        all_members = session.exec(all_members_stmt).all()
-        logger.info(f"[NOTIFICATION DEBUG] Filter 'Birthday' checking {len(all_members)} total members")
+        all_members = session.exec(
+            select(User).where(and_(*base_conditions))
+        ).all()
+
         members = [
-            member for member in all_members
-            if member.dob and member.dob.month == today.month and member.dob.day == today.day
+            m for m in all_members
+            if m.dob and m.dob.month == today.month and m.dob.day == today.day
         ]
-        logger.info(f"[NOTIFICATION DEBUG] Filter 'Birthday' found {len(members)} members with birthday today")
-        
-    elif send_to == "Plan Expiring Today":
-        # Get users whose membership expires today and is still active
+
+    elif send_to == SendToType.PLAN_EXPIRING_TODAY:
         today = date.today()
-        expiring_user_ids_subquery = select(Membership.user_id).where(
-            and_(
-                Membership.gym_id == gym_id,
-                Membership.end_date == today,
-                Membership.status == "active",
-                Membership.end_date >= today  # Still valid today
+        expiring_user_ids = session.exec(
+            select(Membership.user_id).where(
+                and_(
+                    Membership.gym_id == gym_id,
+                    Membership.end_date == today,
+                    Membership.status == "active"
+                )
             )
-        )
-        expiring_user_ids = [uid for uid in session.exec(expiring_user_ids_subquery).all()]
-        
-        logger.info(f"[NOTIFICATION DEBUG] Filter 'Plan Expiring Today' found {len(expiring_user_ids)} user IDs")
-        
-        if not expiring_user_ids:
-            logger.info(f"[NOTIFICATION DEBUG] No members with plan expiring today found, returning empty list")
-            return []
-        
-        stmt = select(User).where(
-            and_(
-                *base_conditions,
-                User.id.in_(expiring_user_ids)
+        ).all()
+
+        if expiring_user_ids:
+            members = session.exec(
+                select(User).where(
+                    and_(*base_conditions, User.id.in_(expiring_user_ids))
+                )
+            ).all()
+
+    elif send_to == SendToType.PLAN_EXPIRING_IN_3_DAYS:
+        target_date = date.today() + timedelta(days=3)
+        expiring_user_ids = session.exec(
+            select(Membership.user_id).where(
+                and_(
+                    Membership.gym_id == gym_id,
+                    Membership.end_date == target_date,
+                    Membership.status == "active"
+                )
             )
-        )
-        members = session.exec(stmt).all()
-        logger.info(f"[NOTIFICATION DEBUG] Filter 'Plan Expiring Today' matched {len(members)} members with device tokens")
-        
-    elif send_to == "Plan Expiring in 3 days":
-        # Get users whose membership expires in 3 days and is still active
-        today = date.today()
-        three_days_later = today + timedelta(days=3)
-        expiring_user_ids_subquery = select(Membership.user_id).where(
-            and_(
-                Membership.gym_id == gym_id,
-                Membership.end_date == three_days_later,
-                Membership.status == "active",
-                Membership.end_date >= today  # Still valid
-            )
-        )
-        expiring_user_ids = [uid for uid in session.exec(expiring_user_ids_subquery).all()]
-        
-        logger.info(f"[NOTIFICATION DEBUG] Filter 'Plan Expiring in 3 days' found {len(expiring_user_ids)} user IDs")
-        
-        if not expiring_user_ids:
-            logger.info(f"[NOTIFICATION DEBUG] No members with plan expiring in 3 days found, returning empty list")
-            return []
-        
-        stmt = select(User).where(
-            and_(
-                *base_conditions,
-                User.id.in_(expiring_user_ids)
-            )
-        )
-        members = session.exec(stmt).all()
-        logger.info(f"[NOTIFICATION DEBUG] Filter 'Plan Expiring in 3 days' matched {len(members)} members with device tokens")
-        
-    elif send_to == "Specific Members":
-        # Get specific members by their IDs
-        logger.info(f"[NOTIFICATION DEBUG] Filter 'Specific Members' requested for {len(member_ids) if member_ids else 0} member IDs")
-        
-        if not member_ids:
-            logger.info(f"[NOTIFICATION DEBUG] No member_ids provided for 'Specific Members' filter, returning empty list")
-            return []
-        
-        # Verify all member_ids belong to the gym
-        stmt = select(User).where(
-            and_(
-                *base_conditions,
-                User.id.in_(member_ids)
-            )
-        )
-        members = session.exec(stmt).all()
-        logger.info(f"[NOTIFICATION DEBUG] Filter 'Specific Members' matched {len(members)} members with device tokens out of {len(member_ids)} requested")
-        
-    else:
-        # Invalid send_to value, return empty
-        logger.warning(f"[NOTIFICATION DEBUG] Invalid send_to value: '{send_to}', returning empty list")
-        return []
-    
+        ).all()
+
+        if expiring_user_ids:
+            members = session.exec(
+                select(User).where(
+                    and_(*base_conditions, User.id.in_(expiring_user_ids))
+                )
+            ).all()
+
+    elif send_to == SendToType.SPECIFIC_MEMBERS:
+        if member_ids:
+            members = session.exec(
+                select(User).where(
+                    and_(*base_conditions, User.id.in_(member_ids))
+                )
+            ).all()
+
     if not members:
-        logger.info(f"[NOTIFICATION DEBUG] No members found after applying filter, returning empty list")
         return []
-    
-    logger.info(f"[NOTIFICATION DEBUG] Starting to send notifications to {len(members)} members")
-    
-    # Send notifications and include user_id in results
-    results = []
-    for idx, member in enumerate(members, 1):
-        if member.device_token:
-            logger.info(
-                f"[NOTIFICATION DEBUG] Sending notification #{idx}/{len(members)} to user_id={member.id}, "
-                f"device_token={member.device_token[:20]}..."
+
+    results: list[dict] = []
+
+    for member in members:
+        try:
+            response = send_fcm_notification(
+                member.device_token,
+                title,
+                body,
+                data
             )
-            try:
-                result = send_fcm_notification(member.device_token, title, body, data)
-                logger.info(
-                    f"[NOTIFICATION DEBUG] Notification #{idx} SUCCESS for user_id={member.id}. "
-                    f"FCM Response: {result}"
-                )
-                results.append({
-                    "user_id": member.id,
-                    "device_token": member.device_token,
-                    "success": True,
-                    "response": result
-                })
-            except Exception as e:
-                logger.error(
-                    f"[NOTIFICATION DEBUG] Notification #{idx} FAILED for user_id={member.id}. "
-                    f"Error: {str(e)}",
-                    exc_info=True
-                )
-                results.append({
-                    "user_id": member.id,
-                    "device_token": member.device_token,
-                    "success": False,
-                    "error": str(e)
-                })
-        else:
-            logger.warning(f"[NOTIFICATION DEBUG] Member {member.id} has no device_token, skipping")
-    
-    logger.info(f"[NOTIFICATION DEBUG] Completed sending notifications. Total results: {len(results)}")
+            results.append({
+                "user_id": member.id,
+                "device_token": member.device_token,
+                "success": True,
+                "response": response
+            })
+        except Exception as e:
+            results.append({
+                "user_id": member.id,
+                "device_token": member.device_token,
+                "success": False,
+                "error": str(e)
+            })
+
     return results

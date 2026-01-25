@@ -504,7 +504,10 @@ class UserService:
 
         # Update only provided fields
         update_data = user_update.model_dump(exclude_unset=True)
-        
+
+        # Name is not updatable via this endpoint (owner cannot change member name)
+        update_data.pop("name", None)
+
         # Handle role name to role_id conversion
         if 'role' in update_data:
             role_name = update_data.pop('role')
