@@ -9,7 +9,7 @@ A comprehensive gym management system built with FastAPI, providing role-based a
 - **ORM**: SQLModel
 - **Authentication**: JWT (JSON Web Tokens)
 - **Password Hashing**: bcrypt
-- **Python Version**: 3.13+
+- **Python Version**: 3.11+
 
 ## Project Structure
 
@@ -74,7 +74,7 @@ organised-gym/
 
 ### Prerequisites
 
-- Python 3.13+
+- Python 3.11+
 - PostgreSQL database
 - uv package manager (recommended) or pip
 
