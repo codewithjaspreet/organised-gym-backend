@@ -17,6 +17,15 @@ class Settings(BaseSettings):
     cloudinary_cloud_name: Optional[str] = Field(default=None, description="Cloudinary cloud name")
     cloudinary_cloud_api_key: Optional[str] = Field(default=None, description="Cloudinary API key")
     cloudinary_cloud_api_secret: Optional[str] = Field(default=None, description="Cloudinary API secret")
+    # Email configuration
+    smtp_host: Optional[str] = Field(default=None, description="SMTP server host")
+    smtp_port: int = Field(default=587, description="SMTP server port")
+    smtp_user: Optional[str] = Field(default=None, description="SMTP username")
+    smtp_password: Optional[str] = Field(default=None, description="SMTP password")
+    smtp_from_email: Optional[str] = Field(default=None, description="Email address to send from")
+    smtp_use_tls: bool = Field(default=True, description="Use TLS for SMTP")
+    frontend_url: Optional[str] = Field(default=None, description="Frontend URL for password reset links")
+    password_reset_token_expire_hours: int = Field(default=1, description="Password reset token expiration in hours")
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

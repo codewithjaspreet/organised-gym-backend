@@ -57,3 +57,28 @@ class InvalidPasswordError(HTTPException):
 class ValidationError(HTTPException):
     def __init__(self, detail: str = "Validation error"):
         super().__init__(status_code=400, detail=detail)
+
+
+class InvalidResetTokenError(HTTPException):
+    def __init__(self, detail: str = "Invalid or expired reset token"):
+        super().__init__(status_code=400, detail=detail)
+
+
+class ResetTokenExpiredError(HTTPException):
+    def __init__(self, detail: str = "Reset token has expired"):
+        super().__init__(status_code=400, detail=detail)
+
+
+class ResetTokenAlreadyUsedError(HTTPException):
+    def __init__(self, detail: str = "Reset token has already been used"):
+        super().__init__(status_code=400, detail=detail)
+
+
+class PasswordMismatchError(HTTPException):
+    def __init__(self, detail: str = "Current password is incorrect"):
+        super().__init__(status_code=400, detail=detail)
+
+
+class SamePasswordError(HTTPException):
+    def __init__(self, detail: str = "New password must be different from the current password"):
+        super().__init__(status_code=400, detail=detail)

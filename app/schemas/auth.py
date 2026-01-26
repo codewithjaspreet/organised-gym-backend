@@ -32,3 +32,25 @@ class LoginResponse(BaseModel):
     token_type: str = Field(..., description="The token type")
     role: str = Field(..., description="The user's role")
     user_name: Optional[str] = Field(None, description="The user's username")
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(..., description="The user's email address", pattern=r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., description="The password reset token")
+    old_password: str = Field(..., description="The user's current password", min_length=6)
+    new_password: str = Field(..., description="The new password", min_length=6)
+    
+    @field_validator('new_password')
+    @classmethod
+    def validate_password_strength(cls, v):
+        """Validate password strength: at least 6 characters, contains letters and numbers"""
+        if len(v) < 6:
+            raise ValueError("Password must be at least 6 characters long")
+        if not any(char.isalpha() for char in v):
+            raise ValueError("Password must contain at least one letter")
+        if not any(char.isdigit() for char in v):
+            raise ValueError("Password must contain at least one number")
+        return v
