@@ -1,0 +1,43 @@
+version: 1.0
+runtime: python311
+
+build:
+  commands:
+    build:
+      - pip3 install --upgrade pip
+      - pip3 install -r requirements.txt
+
+run:
+  runtime-version: 3.11
+  pre-run:
+    - pip3 install -r requirements.txt
+  command: python3 -m uvicorn main:app --host 0.0.0.0 --port 8080
+  network:
+    port: 8080
+    env: PORT
+  env:
+    - name: APP_NAME
+      value: "Organised Gym"
+    - name: ALGORITHM
+      value: "HS256"
+    - name: ACCESS_TOKEN_EXPIRE_MINUTES
+      value: "43200"
+    - name: REFRESH_TOKEN_EXPIRE_DAYS
+      value: "7"
+    - name: FIREBASE_PROJECT_ID
+      value: "app-organised-gym"
+  secrets:
+    - name: DB_CONNECTION_URL
+      value-from: "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:organised-gym/prod:DB_CONNECTION_URL::"
+    - name: SECRET_KEY
+      value-from: "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:organised-gym/prod:SECRET_KEY::"
+    - name: CLOUDINARY_CLOUD_NAME
+      value-from: "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:organised-gym/prod:CLOUDINARY_CLOUD_NAME::"
+    - name: CLOUDINARY_CLOUD_API_KEY
+      value-from: "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:organised-gym/prod:CLOUDINARY_CLOUD_API_KEY::"
+    - name: CLOUDINARY_CLOUD_API_SECRET
+      value-from: "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:organised-gym/prod:CLOUDINARY_CLOUD_API_SECRET::"
+    - name: CLOUDINARY_URL
+      value-from: "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:organised-gym/prod:CLOUDINARY_URL::"
+    - name: FIREBASE_SERVICE_ACCOUNT_JSON_BASE64
+      value-from: "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:organised-gym/prod:FIREBASE_SERVICE_ACCOUNT_JSON_BASE64::"
