@@ -508,6 +508,57 @@ class UserService:
         # Name is not updatable via this endpoint (owner cannot change member name)
         update_data.pop("name", None)
 
+        # Handle gym_id = None (remove member from gym)
+        if 'gym_id' in update_data and update_data['gym_id'] is None:
+            update_data['gym_id'] = None
+            # Also remove plan_id when removing from gym
+            update_data['plan_id'] = None
+            # End all active memberships for this user
+            today = date.today()
+            active_memberships_stmt = select(Membership).where(
+                and_(
+                    Membership.user_id == user_id,
+                    Membership.status == "active"
+                )
+            )
+            active_memberships = self.session.exec(active_memberships_stmt).all()
+            for membership in active_memberships:
+                membership.status = "expired"
+                if membership.end_date > today:
+                    membership.end_date = today
+
+        # Handle plan_id updates
+        if 'plan_id' in update_data:
+            plan_id_value = update_data['plan_id']
+            
+            if plan_id_value is None:
+                # Remove plan - end active memberships
+                today = date.today()
+                active_memberships_stmt = select(Membership).where(
+                    and_(
+                        Membership.user_id == user_id,
+                        Membership.status == "active"
+                    )
+                )
+                active_memberships = self.session.exec(active_memberships_stmt).all()
+                for membership in active_memberships:
+                    membership.status = "expired"
+                    if membership.end_date > today:
+                        membership.end_date = today
+            else:
+                # Update plan_id - update active membership's plan_id
+                today = date.today()
+                active_membership_stmt = select(Membership).where(
+                    and_(
+                        Membership.user_id == user_id,
+                        Membership.status == "active",
+                        Membership.end_date >= today
+                    )
+                ).order_by(Membership.end_date.desc())
+                active_membership = self.session.exec(active_membership_stmt).first()
+                if active_membership:
+                    active_membership.plan_id = plan_id_value
+
         # Handle role name to role_id conversion
         if 'role' in update_data:
             role_name = update_data.pop('role')

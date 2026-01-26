@@ -73,7 +73,7 @@ def update_member(
     session: SessionDep = None,
     current_user: User = require_admin
 ):
-    """Update a member"""
+    """Update a member. Set gym_id to null to remove member from gym."""
     gym = get_owner_gym(current_user, session)
     if not gym:
         return failure_response(
@@ -83,11 +83,23 @@ def update_member(
     user_service = UserService(session=session)
     member = user_service.get_user(member_id)
     
+    # Check if member belongs to owner's gym
     if member.gym_id != gym.id or member.role != "MEMBER":
         return failure_response(
             message="Member not found in your gym",
             status_code=status.HTTP_404_NOT_FOUND
         )
+    
+    # Allow gym_id=null to remove member from gym
+    # If gym_id is being set, validate it's either null or the owner's gym
+    update_data = user.model_dump(exclude_unset=True)
+    if 'gym_id' in update_data:
+        new_gym_id = update_data['gym_id']
+        if new_gym_id is not None and new_gym_id != gym.id:
+            return failure_response(
+                message="You can only assign members to your own gym or remove them (gym_id=null)",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
     
     updated_member = user_service.update_user(member_id, user)
     return success_response(data=updated_member, message="Member updated successfully")
