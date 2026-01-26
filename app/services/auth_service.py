@@ -1,21 +1,11 @@
-from sqlmodel import select, and_
-from datetime import datetime, timedelta
-import secrets
-from app.core.exceptions import (
-    EmailAlreadyExistsError, InvalidCredentialsError, PhoneAlreadyExistsError, 
-    UserAlreadyExistsError, UserNameAlreadyExistsError, NotFoundError,
-    InvalidResetTokenError, ResetTokenExpiredError, ResetTokenAlreadyUsedError,
-    PasswordMismatchError, SamePasswordError
-)
+from sqlmodel import select
+from app.core.exceptions import EmailAlreadyExistsError, InvalidCredentialsError, PhoneAlreadyExistsError, UserAlreadyExistsError, UserNameAlreadyExistsError, NotFoundError
 from app.core.security import create_access_token, create_refresh_token, get_password_hash, verify_password
-from app.core.config import settings
 from app.db.db import SessionDep
 from app.models.user import User
 from app.models.role import Role
-from app.models.password_reset_token import PasswordResetToken
 from app.schemas.auth import LoginRequest, LoginResponse
 from app.schemas.user import UserCreate
-from app.utils.email_service import EmailService
 
 class AuthService:
 
@@ -189,123 +179,3 @@ class AuthService:
             token_type="bearer",
             role=role_name
         )
-
-    def forgot_password(self, email: str) -> None:
-        """
-        Generate a secure password reset token and send it via email.
-        Does not reveal whether the email exists in the system.
-        """
-        # Find user by email (but don't reveal if they exist)
-        stmt = select(User).where(User.email == email)
-        user = self.session.exec(stmt).first()
-        
-        # Always return success to avoid email enumeration
-        # Only proceed if user exists
-        if user:
-            # Invalidate any existing unused tokens for this user
-            stmt = select(PasswordResetToken).where(
-                and_(
-                    PasswordResetToken.user_id == user.id,
-                    PasswordResetToken.is_used == False,
-                    PasswordResetToken.expires_at > datetime.now()
-                )
-            )
-            existing_tokens = self.session.exec(stmt).all()
-            for token in existing_tokens:
-                token.is_used = True
-                token.used_at = datetime.now()
-            
-            # Generate secure random token
-            reset_token = secrets.token_urlsafe(32)
-            
-            # Set expiration time (default 1 hour)
-            expire_hours = getattr(settings, 'password_reset_token_expire_hours', 1)
-            expires_at = datetime.now() + timedelta(hours=expire_hours)
-            
-            # Create password reset token record
-            reset_token_record = PasswordResetToken(
-                user_id=user.id,
-                token=reset_token,
-                expires_at=expires_at,
-                is_used=False
-            )
-            
-            self.session.add(reset_token_record)
-            self.session.commit()
-            
-            # Send email (don't fail if email sending fails)
-            EmailService.send_password_reset_email(
-                to_email=user.email,
-                reset_token=reset_token
-            )
-        
-        # Always return success to prevent email enumeration
-        return None
-
-    def reset_password(
-        self, 
-        token: str, 
-        old_password: str, 
-        new_password: str
-    ) -> None:
-        """
-        Reset user password using reset token.
-        Validates token, old password, and enforces password rules.
-        """
-        # 1. Find the reset token
-        stmt = select(PasswordResetToken).where(PasswordResetToken.token == token)
-        reset_token_record = self.session.exec(stmt).first()
-        
-        if not reset_token_record:
-            raise InvalidResetTokenError(detail="Invalid or expired reset token")
-        
-        # 2. Check if token is already used
-        if reset_token_record.is_used:
-            raise ResetTokenAlreadyUsedError(detail="Reset token has already been used")
-        
-        # 3. Check if token is expired
-        if reset_token_record.expires_at < datetime.now():
-            raise ResetTokenExpiredError(detail="Reset token has expired")
-        
-        # 4. Get the user
-        stmt = select(User).where(User.id == reset_token_record.user_id)
-        user = self.session.exec(stmt).first()
-        
-        if not user:
-            raise InvalidResetTokenError(detail="Invalid or expired reset token")
-        
-        # 5. Verify old password
-        if not verify_password(old_password, user.password_hash):
-            raise PasswordMismatchError(detail="Current password is incorrect")
-        
-        # 6. Check if new password is different from old password
-        if verify_password(new_password, user.password_hash):
-            raise SamePasswordError(detail="New password must be different from the current password")
-        
-        # 7. Validate password strength (enforced by schema, but double-check here)
-        if len(new_password) < 6:
-            raise ValueError("Password must be at least 6 characters long")
-        if not any(char.isalpha() for char in new_password):
-            raise ValueError("Password must contain at least one letter")
-        if not any(char.isdigit() for char in new_password):
-            raise ValueError("Password must contain at least one number")
-        
-        # 8. Hash and update password
-        user.password_hash = get_password_hash(new_password)
-        
-        # 9. Mark token as used
-        reset_token_record.is_used = True
-        reset_token_record.used_at = datetime.now()
-        
-        # 10. Save changes
-        self.session.add(user)
-        self.session.add(reset_token_record)
-        self.session.commit()
-        
-        # Note: Optionally invalidate all existing user sessions by:
-        # - Storing a token version/revocation list
-        # - Checking token version on each request
-        # - Incrementing version here to invalidate all tokens
-        # For now, we'll just update the password and mark token as used
-        
-        return None

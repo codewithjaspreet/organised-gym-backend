@@ -1,5 +1,6 @@
 from fastapi import APIRouter, status
 from sqlmodel import select
+from sqlalchemy import func, and_
 from app.core.permissions import require_admin
 from app.db.db import SessionDep
 from app.models.user import User
@@ -48,6 +49,51 @@ def add_member(
             message="You can only add members to your own gym",
             status_code=status.HTTP_403_FORBIDDEN
         )
+    
+    # Check OG plan max_members limit
+    from app.models.gym_subscription import GymSubscription, SubscriptionStatus
+    from app.models.og_plan import OGPlan
+    from app.models.role import Role as RoleModel
+    from datetime import date
+    from sqlalchemy import func, and_
+    
+    # Get active OG plan subscription for the gym
+    today = date.today()
+    subscription_stmt = select(GymSubscription).where(
+        and_(
+            GymSubscription.gym_id == gym.id,
+            GymSubscription.status == SubscriptionStatus.ACTIVE,
+            GymSubscription.end_date >= today
+        )
+    ).order_by(GymSubscription.end_date.desc())
+    active_subscription = session.exec(subscription_stmt).first()
+    
+    if active_subscription:
+        # Get OG plan details
+        og_plan_stmt = select(OGPlan).where(OGPlan.id == active_subscription.og_plan_id)
+        og_plan = session.exec(og_plan_stmt).first()
+        
+        if og_plan and og_plan.max_members > 0:
+            # Count current active members in the gym
+            member_role_stmt = select(RoleModel).where(RoleModel.name == "MEMBER")
+            member_role = session.exec(member_role_stmt).first()
+            
+            if member_role:
+                member_count_stmt = select(func.count(User.id)).where(
+                    and_(
+                        User.gym_id == gym.id,
+                        User.role_id == member_role.id,
+                        User.is_active == True
+                    )
+                )
+                current_member_count = session.exec(member_count_stmt).first() or 0
+                
+                # Check if adding this member would exceed the limit
+                if current_member_count >= og_plan.max_members:
+                    return failure_response(
+                        message=f"Cannot add member. Gym has reached the maximum member limit of {og_plan.max_members} for the current OG plan.",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
     
     user_service = UserService(session=session)
     member_data = user_service.add_member_to_gym(

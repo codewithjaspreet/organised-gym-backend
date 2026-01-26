@@ -107,22 +107,21 @@ import base64
 import json
 
 def get_fcm_access_token() -> str:
-
-    if settings.firebase_service_account_json_base64:
-        decoded = base64.b64decode(
-            settings.firebase_service_account_json_base64
-        ).decode("utf-8")
-
+    # Try FIREBASE_CREDENTIALS first (JSON string), then fallback to base64
+    if settings.firebase_credentials:
+        info = json.loads(settings.firebase_credentials)
+    elif settings.firebase_service_account_json_base64:
+        decoded = base64.b64decode(settings.firebase_service_account_json_base64).decode("utf-8")
         info = json.loads(decoded)
-
-        credentials = service_account.Credentials.from_service_account_info(
-            info,
-            scopes=["https://www.googleapis.com/auth/firebase.messaging"]
-        )
-        credentials.refresh(Request())
-        return credentials.token
-
-    raise RuntimeError("Firebase credentials not configured")
+    else:
+        raise RuntimeError("Firebase credentials not configured")
+    
+    credentials = service_account.Credentials.from_service_account_info(
+        info,
+        scopes=["https://www.googleapis.com/auth/firebase.messaging"]
+    )
+    credentials.refresh(Request())
+    return credentials.token
 
 
 def send_fcm_notification(
@@ -144,16 +143,27 @@ def send_fcm_notification(
         dict: Response from FCM API
         
     Raises:
+        ValueError: If device_token is empty or invalid
         Exception: If notification sending fails
     """
+    # Validate device token
+    if not device_token or not device_token.strip():
+        raise ValueError("Device token cannot be empty")
+    
     logger.info(
         f"[NOTIFICATION DEBUG] Preparing FCM notification - "
         f"Device Token: {device_token[:20]}..., Title: '{title}', Body: '{body[:50]}...', "
         f"Data: {data if data else 'None'}"
     )
     
-    access_token = get_fcm_access_token()
-    logger.debug(f"[NOTIFICATION DEBUG] FCM access token obtained successfully")
+    try:
+        access_token = get_fcm_access_token()
+        if not access_token:
+            raise ValueError("FCM access token is empty")
+        logger.debug(f"[NOTIFICATION DEBUG] FCM access token obtained successfully (length: {len(access_token)})")
+    except Exception as e:
+        logger.error(f"[NOTIFICATION DEBUG] Failed to get FCM access token: {str(e)}")
+        raise
     
     payload = {
         "message": {
@@ -197,11 +207,11 @@ def send_fcm_notification(
         logger.info(f"[NOTIFICATION DEBUG] FCM notification sent successfully. Response: {response_json}")
         return response_json
     except requests.exceptions.RequestException as e:
-        logger.error(
-            f"[NOTIFICATION DEBUG] FCM API request failed - Status: {getattr(e.response, 'status_code', 'N/A')}, "
-            f"Error: {str(e)}, Response: {getattr(e.response, 'text', 'N/A')[:200]}",
-            exc_info=True
-        )
+        # Log error but don't include full traceback to reduce noise
+        error_msg = f"FCM API request failed - Status: {getattr(e.response, 'status_code', 'N/A')}, Error: {str(e)}"
+        if hasattr(e, 'response') and e.response is not None:
+            error_msg += f", Response: {e.response.text[:200]}"
+        logger.warning(f"[NOTIFICATION DEBUG] {error_msg}")
         raise
 
 
@@ -320,11 +330,12 @@ def send_fcm_notification_to_gym_members(
         User.gym_id == gym_id,
         User.role_id == member_role.id,
         User.device_token.isnot(None),
+        User.device_token != '',
         User.is_active == True
     )
     members = session.exec(stmt).all()
     
-    device_tokens = [member.device_token for member in members if member.device_token]
+    device_tokens = [member.device_token for member in members if member.device_token and member.device_token.strip()]
     
     if not device_tokens:
         return []
@@ -355,6 +366,7 @@ def send_fcm_notification_to_gym_members_by_filter(
         User.gym_id == gym_id,
         User.role_id == member_role.id,
         User.device_token.isnot(None),
+        User.device_token != '',
         User.is_active == True
     ]
 
@@ -445,6 +457,19 @@ def send_fcm_notification_to_gym_members_by_filter(
     results: list[dict] = []
 
     for member in members:
+        # Skip if device_token is empty or invalid
+        if not member.device_token or member.device_token.strip() == '':
+            logger.warning(
+                f"[NOTIFICATION DEBUG] Skipping user {member.id} - empty or invalid device_token"
+            )
+            results.append({
+                "user_id": member.id,
+                "device_token": member.device_token,
+                "success": False,
+                "error": "Empty or invalid device token"
+            })
+            continue
+            
         try:
             response = send_fcm_notification(
                 member.device_token,
@@ -459,6 +484,9 @@ def send_fcm_notification_to_gym_members_by_filter(
                 "response": response
             })
         except Exception as e:
+            logger.warning(
+                f"[NOTIFICATION DEBUG] Failed to send notification to user {member.id}: {str(e)}"
+            )
             results.append({
                 "user_id": member.id,
                 "device_token": member.device_token,

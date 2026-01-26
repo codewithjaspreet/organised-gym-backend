@@ -24,7 +24,6 @@ from app.models.attendance import Attendance
 from app.models.announcement import Announcement
 from app.models.og_plan import OGPlan
 from app.models.gym_subscription import GymSubscription
-from app.models.password_reset_token import PasswordResetToken
 
 # Import config for database URL
 from app.core.config import settings

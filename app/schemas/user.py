@@ -78,6 +78,7 @@ class UserResponse(BaseModel):
     email: str
     phone: str
     gender: Gender
+    dob: date
     address_line1: str
     address_line2: Optional[str] = None
     gym_id: Optional[str] = None

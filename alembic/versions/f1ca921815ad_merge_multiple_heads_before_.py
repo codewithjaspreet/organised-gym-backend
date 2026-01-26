@@ -16,8 +16,8 @@ revision: str = 'f1ca921815ad'
 down_revision = (
     "201ec2fcbbc9",
     "b2c3d4e5f6a7",
-    "a1b2c3d4e5f7",
 )
+
 
 
 branch_labels: Union[str, Sequence[str], None] = None
