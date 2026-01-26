@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     secret_key: str
     refresh_token_expire_days: int = 7
+    subscription_grace_period_days: int = Field(default=5, description="Grace period in days for expired subscriptions")
     firebase_credentials: Optional[str] = Field(default=None, description="Firebase credentials as JSON string")
     firebase_project_id: str = Field(default="app-organised-gym", description="Firebase project ID")
     cloudinary_url: Optional[str] = Field(default=None, description="Cloudinary URL for image uploads")

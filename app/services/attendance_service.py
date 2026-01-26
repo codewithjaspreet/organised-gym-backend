@@ -287,26 +287,15 @@ class AttendanceService:
         if not member_role:
             raise NotFoundError(detail="MEMBER role not found")
         
-        # Build member query
-        member_stmt = select(User).where(
+        # Get ALL members (without search filter) for total counts
+        all_members_stmt = select(User).where(
             and_(
                 User.gym_id == gym_id,
                 User.role_id == member_role.id,
                 User.is_active == True
             )
         )
-        
-        # Apply search filter if provided
-        if search_query:
-            search_pattern = f"%{search_query.lower()}%"
-            member_stmt = member_stmt.where(
-                or_(
-                    func.lower(User.name).like(search_pattern),
-                    func.lower(User.user_name).like(search_pattern)
-                )
-            )
-        
-        all_members = self.session.exec(member_stmt).all()
+        all_members = self.session.exec(all_members_stmt).all()
         total_members = len(all_members)
         
         # Calculate date range for the target date (IST timezone)
@@ -333,12 +322,42 @@ class AttendanceService:
         # Create a map of user_id -> attendance record for quick lookup
         attendance_map = {record.user_id: record for record in attendance_records}
         
-        # Build member attendance list
-        member_attendance_list: List[MemberAttendanceItem] = []
+        # Calculate total present and absent counts for ALL members (regardless of filters)
         present_count = 0
         absent_count = 0
         
         for member in all_members:
+            attendance_record = attendance_map.get(member.id)
+            if attendance_record is not None:
+                present_count += 1
+            else:
+                absent_count += 1
+        
+        # Now get filtered members for the response list
+        member_stmt = select(User).where(
+            and_(
+                User.gym_id == gym_id,
+                User.role_id == member_role.id,
+                User.is_active == True
+            )
+        )
+        
+        # Apply search filter if provided
+        if search_query:
+            search_pattern = f"%{search_query.lower()}%"
+            member_stmt = member_stmt.where(
+                or_(
+                    func.lower(User.name).like(search_pattern),
+                    func.lower(User.user_name).like(search_pattern)
+                )
+            )
+        
+        filtered_members = self.session.exec(member_stmt).all()
+        
+        # Build member attendance list (with filters applied)
+        member_attendance_list: List[MemberAttendanceItem] = []
+        
+        for member in filtered_members:
             attendance_record = attendance_map.get(member.id)
             is_present = attendance_record is not None
             
@@ -364,9 +383,6 @@ class AttendanceService:
                 
                 check_in_time_str = check_in_at.strftime("%d-%m-%Y %H:%M:%S")
                 focus = attendance_record.focus
-                present_count += 1
-            else:
-                absent_count += 1
             
             member_attendance_list.append(
                 MemberAttendanceItem(

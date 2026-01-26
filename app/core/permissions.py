@@ -1,107 +1,126 @@
 from fastapi import HTTPException, status, Depends
-from typing import List
-from sqlmodel import select, Session, and_, or_
-from datetime import date
+from sqlmodel import select, Session, and_
+from datetime import date, timedelta
 from app.core.dependencies import get_current_user, get_session
-from datetime import date
-from fastapi import Depends, HTTPException, status
-from sqlmodel import select, and_
 from app.models.gym import Gym
 from app.models.gym_subscription import GymSubscription, SubscriptionStatus
 from app.models.role import Role
 from app.models.user import RoleEnum, User
-from datetime import date
-from fastapi import Depends, HTTPException, status
-from sqlmodel import select, and_
-
 from app.utils.fcm_notification import logger
+from app.core.config import settings
 
 async def get_current_active_user(
     current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
 ) -> User:
-
-    logger.error(
-        f"AUTH DEBUG | user_id={current_user.id} | "
-        f"role_id={getattr(current_user, 'role_id', None)} | "
-        f"user_dict={current_user.__dict__}"
-    )
-
-
-    logger.info(
-        f"Auth check started | user_id={current_user.id} | "
-        f"role_id={current_user.role_id} | path=protected"
-    )
+    """
+    Validates that the current user is active and has a valid subscription or membership,
+    including grace-period handling.
+    """
 
     if not current_user.is_active:
-        logger.warning(f"User inactive | user_id={current_user.id}")
+        logger.warning(f"Inactive user | user_id={current_user.id}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Inactive user"
+            detail="Inactive user",
         )
 
-    if current_user.role_id:
-        role = session.get(Role, current_user.role_id)
-        logger.info(
-            f"User role resolved | user_id={current_user.id} | role={role.name if role else None}"
-        )
+    role = session.get(Role, current_user.role_id) if current_user.role_id else None
+    role_name = role.name if role else None
 
-        if role and role.name in {
-            RoleEnum.OG.value,
-            "PLATFORM_ADMIN",
-            "OG",
-        }:
-            logger.info(
-                f"Bypassing subscription checks for platform admin | user_id={current_user.id}"
-            )
-            return current_user
+    if role_name in {RoleEnum.OG.value, "PLATFORM_ADMIN", "OG"}:
+        return current_user
+
+    today = date.today()
+    grace_days = getattr(settings, "subscription_grace_period_days", 5)
+    grace_period_start = today - timedelta(days=grace_days)
 
     gym_id = current_user.gym_id
-    logger.info(f"Initial gym_id | user_id={current_user.id} | gym_id={gym_id}")
-
     if not gym_id:
         gym = session.exec(
             select(Gym).where(Gym.owner_id == current_user.id)
         ).first()
         gym_id = gym.id if gym else None
-        logger.info(
-            f"Gym resolved via ownership | user_id={current_user.id} | gym_id={gym_id}"
-        )
 
-    # 4️⃣ Subscription check
     if gym_id:
-        today = date.today()
-        logger.info(
-            f"Checking subscription | gym_id={gym_id} | date={today}"
-        )
-
-        active_subscription = session.exec(
+        subscription = session.exec(
             select(GymSubscription)
             .where(
                 and_(
                     GymSubscription.gym_id == gym_id,
                     GymSubscription.status == SubscriptionStatus.ACTIVE,
-                    GymSubscription.end_date >= today,
+                    GymSubscription.end_date >= grace_period_start,
                 )
             )
             .order_by(GymSubscription.end_date.desc())
         ).first()
 
-        if not active_subscription:
-            logger.error(
-                f"OG plan expired or missing | user_id={current_user.id} | gym_id={gym_id}"
-            )
+        if not subscription:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={
                     "errorCode": "OG_PLAN_INACTIVE",
-                    "message": "Your gym's OG plan has expired"
-                }
+                    "message": "Your gym's OG plan has expired. Please renew your subscription to continue using the service.",
+                },
             )
 
-    logger.info(f"Auth success | user_id={current_user.id}")
-    return current_user
+        if subscription.end_date < today:
+            days_expired = (today - subscription.end_date).days
+            if days_expired > grace_days:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "errorCode": "OG_PLAN_EXPIRED",
+                        "message": (
+                            f"Your gym's OG plan expired {days_expired} days ago. "
+                            f"The {grace_days}-day grace period has ended. "
+                            "Please renew your subscription to continue using the service."
+                        ),
+                    },
+                )
 
+    # 5️⃣ Member membership check
+    if role_name == "MEMBER" and current_user.gym_id:
+        from app.models.membership import Membership
+
+        membership = session.exec(
+            select(Membership)
+            .where(
+                and_(
+                    Membership.user_id == current_user.id,
+                    Membership.gym_id == current_user.gym_id,
+                    Membership.status == "active",
+                    Membership.end_date >= grace_period_start,
+                )
+            )
+            .order_by(Membership.end_date.desc())
+        ).first()
+
+        if not membership:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "errorCode": "MEMBERSHIP_INACTIVE",
+                    "message": "Your membership has expired. Please renew your membership to continue using the service.",
+                },
+            )
+
+        if membership.end_date < today:
+            days_expired = (today - membership.end_date).days
+            if days_expired > grace_days:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "errorCode": "MEMBERSHIP_EXPIRED",
+                        "message": (
+                            f"Your membership expired {days_expired} days ago. "
+                            f"The {grace_days}-day grace period has ended. "
+                            "Please renew your membership to continue using the service."
+                        ),
+                    },
+                )
+
+    return current_user
 
 def _get_user_role_name(current_user: User, session: Session) -> str:
     """Get the role name for a user from their role_id"""
