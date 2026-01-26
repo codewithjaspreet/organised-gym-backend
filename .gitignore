@@ -5,6 +5,8 @@ build/
 dist/
 wheels/
 .github/
+.apprunner.yaml
+apprunner.yaml
 *.egg-info
 firebase/
 # Virtual environments
