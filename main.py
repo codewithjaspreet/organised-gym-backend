@@ -50,3 +50,7 @@ app.include_router(users_router, prefix="/api/v1")
 @app.get("/")
 def root():
     return {"message": "Hello World"}
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
