@@ -56,6 +56,7 @@ class PendingPaymentResponse(BaseModel):
     payment_id: str = Field(description="The payment id")
     user_id: str = Field(description="The user id who made the payment")
     user_name: str = Field(description="The username of the user who made the payment")
+    name: str = Field(description="The actual name of the user who made the payment")
     proof_url: Optional[str] = Field(default=None, description="The payment proof URL")
     remarks: Optional[str] = Field(default=None, description="Payment remarks/notes")
     payment_at: str = Field(description="Payment creation date and time in Indian format (DD-MM-YYYY HH:MM:SS)")

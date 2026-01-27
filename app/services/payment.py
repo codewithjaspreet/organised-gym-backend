@@ -353,9 +353,10 @@ class PaymentService:
                         days_left=days_left
                     )
             
-            # Get user_name
+            # Get user_name and name
             user = users_by_id.get(payment.user_id)
             user_name = user.user_name if user else ""
+            name = user.name if user else ""
             
             # Map payment status to response status
             if payment.status == "verified":
@@ -370,6 +371,7 @@ class PaymentService:
                 payment_id=payment.id,
                 user_id=payment.user_id,
                 user_name=user_name,
+                name=name,
                 proof_url=payment.proof_url,
                 remarks=None,  # Remarks not stored in Payment model currently
                 payment_at=payment_at_str,
