@@ -12,21 +12,16 @@ run:
     port: 8080
 
   env:
-    # Application
     APP_NAME: "Organised Gym"
     ALGORITHM: "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: "43200"
     REFRESH_TOKEN_EXPIRE_DAYS: "7"
 
-    # AWS / RDS (IAM AUTH)
     AWS_REGION: "ap-south-1"
     DB_HOST: "og-gym-db.cz40qy680dya.ap-south-1.rds.amazonaws.com"
     DB_PORT: "5432"
     DB_NAME: "og_gym"
     DB_USER: "apprunner_user"
-
-    # Firebase
-    FIREBASE_PROJECT_ID: "app-organised-gym"
 
   secrets:
     SECRET_KEY: "arn:aws:secretsmanager:ap-south-1:324512687832:secret:og-db-secrets-NIaDV3:SECRET_KEY::"
