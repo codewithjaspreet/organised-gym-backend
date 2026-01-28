@@ -24,15 +24,33 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade():
-    op.add_column(
-        "announcements",
-        sa.Column("send_to", sa.String(length=50), nullable=False, server_default="All")
-    )
-    op.add_column(
-        "announcements",
-        sa.Column("member_ids", sa.JSON(), nullable=True)
-    )
-    op.alter_column("announcements", "send_to", server_default=None)
+    # Check if columns already exist
+    from sqlalchemy import inspect
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    
+    # Check if announcements table exists
+    tables = inspector.get_table_names()
+    if 'announcements' not in tables:
+        return
+    
+    # Get existing columns
+    columns = [col['name'] for col in inspector.get_columns('announcements')]
+    
+    # Add send_to column if it doesn't exist
+    if 'send_to' not in columns:
+        op.add_column(
+            "announcements",
+            sa.Column("send_to", sa.String(length=50), nullable=False, server_default="All")
+        )
+        op.alter_column("announcements", "send_to", server_default=None)
+    
+    # Add member_ids column if it doesn't exist
+    if 'member_ids' not in columns:
+        op.add_column(
+            "announcements",
+            sa.Column("member_ids", sa.JSON(), nullable=True)
+        )
 
 
 def downgrade():

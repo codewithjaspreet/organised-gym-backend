@@ -20,11 +20,26 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    # Rename bonus_duration to new_duration
-    op.alter_column('memberships', 'bonus_duration', new_column_name='new_duration')
+    # Check if columns already exist
+    from sqlalchemy import inspect
+    conn = op.get_bind()
+    inspector = inspect(conn)
     
-    # Rename discounted_plan_price to new_price
-    op.alter_column('memberships', 'discounted_plan_price', new_column_name='new_price')
+    # Check if memberships table exists
+    tables = inspector.get_table_names()
+    if 'memberships' not in tables:
+        return
+    
+    # Get existing columns
+    columns = [col['name'] for col in inspector.get_columns('memberships')]
+    
+    # Rename bonus_duration to new_duration if bonus_duration exists and new_duration doesn't
+    if 'bonus_duration' in columns and 'new_duration' not in columns:
+        op.alter_column('memberships', 'bonus_duration', new_column_name='new_duration')
+    
+    # Rename discounted_plan_price to new_price if discounted_plan_price exists and new_price doesn't
+    if 'discounted_plan_price' in columns and 'new_price' not in columns:
+        op.alter_column('memberships', 'discounted_plan_price', new_column_name='new_price')
 
 
 def downgrade() -> None:

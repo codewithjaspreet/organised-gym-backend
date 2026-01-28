@@ -20,11 +20,29 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    # Add gym_code column (nullable for existing records)
-    op.add_column('gyms', sa.Column('gym_code', sa.String(), nullable=True))
+    # Check if column already exists
+    from sqlalchemy import inspect
+    conn = op.get_bind()
+    inspector = inspect(conn)
     
-    # Create unique index on gym_code
-    op.create_index(op.f('ix_gyms_gym_code'), 'gyms', ['gym_code'], unique=True)
+    # Check if gyms table exists
+    tables = inspector.get_table_names()
+    if 'gyms' not in tables:
+        return
+    
+    # Get existing columns
+    columns = [col['name'] for col in inspector.get_columns('gyms')]
+    
+    # Add gym_code column if it doesn't exist
+    if 'gym_code' not in columns:
+        op.add_column('gyms', sa.Column('gym_code', sa.String(), nullable=True))
+    
+    # Get existing indexes
+    indexes = [idx['name'] for idx in inspector.get_indexes('gyms')]
+    
+    # Create unique index on gym_code if it doesn't exist
+    if 'ix_gyms_gym_code' not in indexes:
+        op.create_index(op.f('ix_gyms_gym_code'), 'gyms', ['gym_code'], unique=True)
 
 
 def downgrade() -> None:

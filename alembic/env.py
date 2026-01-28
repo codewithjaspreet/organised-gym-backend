@@ -10,6 +10,9 @@ from sqlmodel import SQLModel
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+# Import settings and database URL builder
+from app.core.config import settings
+
 # Import models so Alembic sees them
 from app.models.user import User
 from app.models.gym import Gym
@@ -23,6 +26,7 @@ from app.models.attendance import Attendance
 from app.models.announcement import Announcement
 from app.models.og_plan import OGPlan
 from app.models.gym_subscription import GymSubscription
+from app.models.password_reset_token import PasswordResetToken
 
 # Alembic config
 config = context.config
@@ -36,13 +40,37 @@ target_metadata = SQLModel.metadata
 
 
 def get_database_url() -> str:
-    url = os.getenv("ALEMBIC_DATABASE_URL")
-    if not url:
-        raise RuntimeError(
-            "ALEMBIC_DATABASE_URL is not set. "
-            "This variable is required only when running Alembic migrations."
+    """Build database URL from settings, same as app/db/db.py"""
+    import boto3
+    
+    # Check if password is provided (for testing/fallback)
+    password = settings.db_password
+    
+    if password:
+        return (
+            f"postgresql+psycopg2://{settings.db_user}:"
+            f"{password}@"
+            f"{settings.db_host}:"
+            f"{settings.db_port}/"
+            f"{settings.db_name}"
+            f"?sslmode=require"
         )
-    return url
+    
+    # Use IAM authentication
+    rds = boto3.client("rds", region_name=settings.aws_region)
+    token = rds.generate_db_auth_token(
+        DBHostname=settings.db_host,
+        Port=settings.db_port,
+        DBUsername=settings.db_user,
+    )
+    return (
+        f"postgresql+psycopg2://{settings.db_user}:"
+        f"{token}@"
+        f"{settings.db_host}:"
+        f"{settings.db_port}/"
+        f"{settings.db_name}"
+        f"?sslmode=require"
+    )
 
 
 def run_migrations_offline() -> None:

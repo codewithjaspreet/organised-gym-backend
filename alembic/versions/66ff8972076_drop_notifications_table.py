@@ -20,8 +20,15 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    # Drop notifications table
-    op.drop_table('notifications')
+    # Check if table exists before dropping
+    from sqlalchemy import inspect
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    tables = inspector.get_table_names()
+    
+    # Drop notifications table only if it exists
+    if 'notifications' in tables:
+        op.drop_table('notifications')
 
 
 def downgrade() -> None:

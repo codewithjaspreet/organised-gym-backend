@@ -20,23 +20,48 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    # Add gym_id column to bank_accounts table
-    op.add_column('bank_accounts', sa.Column('gym_id', sa.String(), nullable=True))
+    # Check if column already exists
+    from sqlalchemy import inspect
+    conn = op.get_bind()
+    inspector = inspect(conn)
     
-    # Create index on gym_id
-    op.create_index(op.f('ix_bank_accounts_gym_id'), 'bank_accounts', ['gym_id'], unique=False)
+    # Check if bank_accounts table exists
+    tables = inspector.get_table_names()
+    if 'bank_accounts' not in tables:
+        return
     
-    # Add foreign key constraint
-    op.create_foreign_key(
-        'fk_bank_accounts_gym_id',
-        'bank_accounts',
-        'gyms',
-        ['gym_id'],
-        ['id']
-    )
+    # Get existing columns
+    columns = [col['name'] for col in inspector.get_columns('bank_accounts')]
+    
+    # Add gym_id column if it doesn't exist
+    if 'gym_id' not in columns:
+        op.add_column('bank_accounts', sa.Column('gym_id', sa.String(), nullable=True))
+    
+    # Get existing indexes
+    indexes = [idx['name'] for idx in inspector.get_indexes('bank_accounts')]
+    
+    # Create index on gym_id if it doesn't exist
+    if 'ix_bank_accounts_gym_id' not in indexes:
+        op.create_index(op.f('ix_bank_accounts_gym_id'), 'bank_accounts', ['gym_id'], unique=False)
+    
+    # Get existing foreign keys
+    foreign_keys = [fk['name'] for fk in inspector.get_foreign_keys('bank_accounts')]
+    
+    # Add foreign key constraint if it doesn't exist
+    if 'fk_bank_accounts_gym_id' not in foreign_keys:
+        op.create_foreign_key(
+            'fk_bank_accounts_gym_id',
+            'bank_accounts',
+            'gyms',
+            ['gym_id'],
+            ['id']
+        )
     
     # Make user_id nullable (for future user-level accounts)
-    op.alter_column('bank_accounts', 'user_id', nullable=True)
+    # Check current nullable status first
+    user_id_col = next((col for col in inspector.get_columns('bank_accounts') if col['name'] == 'user_id'), None)
+    if user_id_col and not user_id_col['nullable']:
+        op.alter_column('bank_accounts', 'user_id', nullable=True)
     
     # Note: If you have existing data, you may need to populate gym_id
     # based on user_id. Uncomment and modify the following if needed:

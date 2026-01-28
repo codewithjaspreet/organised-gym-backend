@@ -20,21 +20,34 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    op.create_table(
-        'bank_accounts',
-        sa.Column('id', sa.String(), nullable=False),
-        sa.Column('user_id', sa.String(), nullable=False),
-        sa.Column('account_holder_name', sa.String(), nullable=False),
-        sa.Column('bank_name', sa.String(), nullable=False),
-        sa.Column('account_number', sa.String(), nullable=False),
-        sa.Column('ifsc_code', sa.String(), nullable=False),
-        sa.Column('upi_id', sa.String(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=False),
-        sa.Column('updated_at', sa.DateTime(), nullable=False),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-        sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_bank_accounts_user_id'), 'bank_accounts', ['user_id'], unique=False)
+    # Check if table already exists
+    from sqlalchemy import inspect
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    tables = inspector.get_table_names()
+    
+    if 'bank_accounts' not in tables:
+        op.create_table(
+            'bank_accounts',
+            sa.Column('id', sa.String(), nullable=False),
+            sa.Column('user_id', sa.String(), nullable=False),
+            sa.Column('account_holder_name', sa.String(), nullable=False),
+            sa.Column('bank_name', sa.String(), nullable=False),
+            sa.Column('account_number', sa.String(), nullable=False),
+            sa.Column('ifsc_code', sa.String(), nullable=False),
+            sa.Column('upi_id', sa.String(), nullable=True),
+            sa.Column('created_at', sa.DateTime(), nullable=False),
+            sa.Column('updated_at', sa.DateTime(), nullable=False),
+            sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+            sa.PrimaryKeyConstraint('id')
+        )
+    
+    # Get existing indexes
+    indexes = [idx['name'] for idx in inspector.get_indexes('bank_accounts')] if 'bank_accounts' in tables else []
+    
+    # Create index if it doesn't exist
+    if 'ix_bank_accounts_user_id' not in indexes:
+        op.create_index(op.f('ix_bank_accounts_user_id'), 'bank_accounts', ['user_id'], unique=False)
 
 
 def downgrade() -> None:

@@ -20,9 +20,36 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    op.add_column('users', sa.Column('plan_id', sa.String(), nullable=True))
-    op.create_index(op.f('ix_users_plan_id'), 'users', ['plan_id'], unique=False)
-    op.create_foreign_key('fk_users_plan_id_plans', 'users', 'plans', ['plan_id'], ['id'])
+    # Check if column already exists
+    from sqlalchemy import inspect
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    
+    # Check if users table exists
+    tables = inspector.get_table_names()
+    if 'users' not in tables:
+        return
+    
+    # Get existing columns
+    columns = [col['name'] for col in inspector.get_columns('users')]
+    
+    # Add plan_id column if it doesn't exist
+    if 'plan_id' not in columns:
+        op.add_column('users', sa.Column('plan_id', sa.String(), nullable=True))
+    
+    # Get existing indexes
+    indexes = [idx['name'] for idx in inspector.get_indexes('users')]
+    
+    # Create index if it doesn't exist
+    if 'ix_users_plan_id' not in indexes:
+        op.create_index(op.f('ix_users_plan_id'), 'users', ['plan_id'], unique=False)
+    
+    # Get existing foreign keys
+    foreign_keys = [fk['name'] for fk in inspector.get_foreign_keys('users')]
+    
+    # Add foreign key constraint if it doesn't exist
+    if 'fk_users_plan_id_plans' not in foreign_keys:
+        op.create_foreign_key('fk_users_plan_id_plans', 'users', 'plans', ['plan_id'], ['id'])
 
 
 def downgrade() -> None:
