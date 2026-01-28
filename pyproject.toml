@@ -19,4 +19,5 @@ dependencies = [
     "google-auth-oauthlib>=1.1.0",
     "requests>=2.31.0",
     "cloudinary>=1.44.1",
+    "resend>=2.21.0",
 ]

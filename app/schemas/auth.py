@@ -32,3 +32,12 @@ class LoginResponse(BaseModel):
     token_type: str = Field(..., description="The token type")
     role: str = Field(..., description="The user's role")
     user_name: Optional[str] = Field(None, description="The user's username")
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(..., description="The user's email address", pattern=r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., description="The password reset token")
+    new_password: str = Field(..., description="The new password", min_length=6)

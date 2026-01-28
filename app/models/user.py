@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from app.models.role import Role
     from app.models.plan import Plan
     from app.models.bank_account import BankAccount
+    from app.models.password_reset_token import PasswordResetToken
 
 
 class Gender(str, Enum):
@@ -128,3 +129,4 @@ class User(SQLModel, table=True):
     memberships: List["Membership"] = Relationship(back_populates="user")
     plan: Optional["Plan"] = Relationship(back_populates="users")
     bank_accounts: List["BankAccount"] = Relationship(back_populates="user")
+    password_reset_tokens: List["PasswordResetToken"] = Relationship(back_populates="user")
