@@ -62,11 +62,11 @@ def _create_gym_subscription(
     og_plan = session.exec(og_plan_stmt).first()
     if not og_plan:
         raise NotFoundError(detail=f"OG Plan with id {og_plan_id} not found")
-    
+
     # Calculate subscription dates
     today = date.today()
     end_date = _calculate_subscription_end_date(today, og_plan.billing_cycle)
-    
+
     # Create gym subscription
     gym_subscription = GymSubscription(
         gym_id=gym_id,
@@ -94,7 +94,7 @@ def create_gym(
             message="ADMIN role not found in system",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
-    
+
     # Validate that owner_id exists and is an ADMIN role user
     stmt = select(User).where(User.id == gym.owner_id)
     owner = session.exec(stmt).first()
@@ -108,14 +108,14 @@ def create_gym(
             message=f"User with id {gym.owner_id} is not an ADMIN. Only ADMIN users can own gyms.",
             status_code=status.HTTP_400_BAD_REQUEST
         )
-    
+
     # Validate og_plan_id is provided (mandatory)
     if not gym.og_plan_id:
         return failure_response(
             message="og_plan_id is required",
             status_code=status.HTTP_400_BAD_REQUEST
         )
-    
+
     # Verify OG Plan exists
     og_plan_stmt = select(OGPlan).where(OGPlan.id == gym.og_plan_id)
     og_plan = session.exec(og_plan_stmt).first()
@@ -124,13 +124,12 @@ def create_gym(
             message=f"OG Plan with id {gym.og_plan_id} not found",
             status_code=status.HTTP_404_NOT_FOUND
         )
-    
-    # Create gym (without og_plan_id in the gym data)
-    gym_dict = gym.model_dump(exclude={"og_plan_id"})
+
+    gym_dict = gym.model_dump()
     gym_create = GymCreate(**gym_dict)
     gym_service = GymService(session=session)
     gym_data = gym_service.create_gym(gym_create)
-    
+
     # Create gym subscription
     try:
         _create_gym_subscription(gym_data.id, gym.og_plan_id, session)
@@ -139,7 +138,7 @@ def create_gym(
             message=str(e.detail) if hasattr(e, 'detail') else str(e),
             status_code=status.HTTP_404_NOT_FOUND
         )
-    
+
     return success_response(data=gym_data, message="Gym created successfully with OG Plan subscription")
 
 

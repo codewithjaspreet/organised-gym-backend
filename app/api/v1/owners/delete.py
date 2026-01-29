@@ -3,6 +3,7 @@ from sqlmodel import select, and_
 from datetime import date
 from app.core.permissions import require_admin
 from app.db.db import SessionDep
+from app.models.role import Role
 from app.models.user import User
 from app.models.gym import Gym
 from app.models.membership import Membership
@@ -37,6 +38,8 @@ def delete_member(
         )
     user_service = UserService(session=session)
     member = user_service.get_user(member_id)
+
+    
     
     if member.gym_id != gym.id or member.role != "MEMBER":
         return failure_response(
@@ -64,8 +67,10 @@ def deactivate_member_plan_and_remove_from_gym(
     
     user_service = UserService(session=session)
     member = user_service.get_user(member_id)
-    
-    if member.gym_id != gym.id or member.role != "MEMBER":
+
+    role_stmt = select(Role).where(Role.name == "MEMBER")
+    role = session.exec(role_stmt).first()  
+    if member.gym_id != gym.id or member.role_id != role.id:
         return failure_response(
             message="Member not found in your gym",
             status_code=status.HTTP_404_NOT_FOUND

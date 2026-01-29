@@ -9,8 +9,8 @@ from app.models.role import Role
 from app.models.membership import Membership
 from app.models.plan import Plan
 from app.schemas.user import (
-    UserCreate, UserResponse, UserUpdate, 
-    MemberListResponse, MemberListItemResponse, 
+    UserCreate, UserResponse, UserUpdate,
+    MemberListResponse, MemberListItemResponse,
     MemberDetailResponse, CurrentPlanResponse,
     AvailableMembersListResponse, AvailableMemberResponse
 )
@@ -25,26 +25,26 @@ class UserService:
         from app.models.role import Role as RoleModel
         from app.models.gym import Gym
         from datetime import date
-        
+
         stmt = select(User).where(User.id == user_id)
         user = self.session.exec(stmt).first()
         if not user:
             raise UserNotFoundError(detail=f"User with id {user_id} not found")
-        
+
         # Get role name
         role_name = None
         if user.role_id:
             role_stmt = select(RoleModel).where(RoleModel.id == user.role_id)
             role = self.session.exec(role_stmt).first()
             role_name = role.name if role else None
-        
+
         # Get gym name
         gym_name = None
         if user.gym_id:
             gym_stmt = select(Gym).where(Gym.id == user.gym_id)
             gym = self.session.exec(gym_stmt).first()
             gym_name = gym.name if gym else None
-        
+
         # For members, get plan_id and plan_amount from active membership instead of user.plan_id
         plan_id = user.plan_id
         plan_amount = None
@@ -61,14 +61,14 @@ class UserService:
                 )
             ).order_by(Membership.end_date.desc())
             active_membership = self.session.exec(membership_stmt).first()
-            
+
             if active_membership and active_membership.plan_id:
                 plan_id = active_membership.plan_id
-                
+
                 # Get plan details to get the amount
                 plan_stmt = select(Plan).where(Plan.id == active_membership.plan_id)
                 plan = self.session.exec(plan_stmt).first()
-                
+
                 if plan:
                     # Use new_price if available, otherwise use plan.price (same logic as get_all_members)
                     plan_amount = active_membership.new_price if active_membership.new_price else plan.price
@@ -99,18 +99,18 @@ class UserService:
                     )
                 ).order_by(Membership.end_date.desc())
                 expired_membership = self.session.exec(expired_stmt).first()
-                
+
                 if expired_membership and expired_membership.plan_id:
                     plan_id = expired_membership.plan_id
-                    
+
                     # Get plan details to get the amount
                     plan_stmt = select(Plan).where(Plan.id == expired_membership.plan_id)
                     plan = self.session.exec(plan_stmt).first()
-                    
+
                     if plan:
                         # Use new_price if available, otherwise use plan.price
                         plan_amount = expired_membership.new_price if expired_membership.new_price else plan.price
-        
+
         user_dict = user.model_dump(exclude={"password_hash"})
         user_dict["role_name"] = role_name
         user_dict["gym_name"] = gym_name
@@ -126,20 +126,20 @@ class UserService:
         user = self.session.exec(stmt).first()
         if not user:
             raise UserNotFoundError(detail=f"Member with id {member_id} not found")
-        
+
         # Verify it's a member and belongs to the gym
         from app.models.role import Role as RoleModel
         member_role_stmt = select(RoleModel).where(RoleModel.name == "MEMBER")
         member_role = self.session.exec(member_role_stmt).first()
-        
+
         if not member_role or user.role_id != member_role.id or user.gym_id != gym_id:
             raise UserNotFoundError(detail=f"Member with id {member_id} not found")
-        
+
         # Get role name
         role_stmt = select(RoleModel).where(RoleModel.id == user.role_id)
         role = self.session.exec(role_stmt).first()
         role_name = role.name if role else "MEMBER"
-        
+
         # Get current active membership and plan
         today = date.today()
         membership_stmt = select(Membership).where(
@@ -151,12 +151,12 @@ class UserService:
             )
         ).order_by(Membership.end_date.desc())
         membership = self.session.exec(membership_stmt).first()
-        
+
         current_plan = None
         if membership:
             plan_stmt = select(Plan).where(Plan.id == membership.plan_id)
             plan = self.session.exec(plan_stmt).first()
-            
+
             if plan:
                 # Use new_price if available, otherwise use plan.price
                 total_price = float(membership.new_price) if membership.new_price else float(plan.price)
@@ -165,7 +165,7 @@ class UserService:
                     status = "expiring_soon"
                 else:
                     status = "active"
-                
+
                 current_plan = CurrentPlanResponse(
                     plan_id=plan.id,
                     plan_name=plan.name,
@@ -174,7 +174,7 @@ class UserService:
                     status=status,
                     days_left=days_left
                 )
-        
+
         return MemberDetailResponse(
             id=user.id,
             user_name=user.user_name,
@@ -207,7 +207,7 @@ class UserService:
     ) -> MemberListResponse:
         """Get all members with filtering, sorting, and pagination"""
         from app.models.role import Role as RoleModel
-        
+
         # Get MEMBER role id
         member_role_stmt = select(RoleModel).where(RoleModel.name == "MEMBER")
         member_role = self.session.exec(member_role_stmt).first()
@@ -219,7 +219,7 @@ class UserService:
                 page_size=page_size,
                 has_next=False
             )
-        
+
         # Base query: all members in the gym
         stmt = select(User).where(
             and_(
@@ -227,7 +227,7 @@ class UserService:
                 User.role_id == member_role.id
             )
         )
-        
+
         # Apply search filter (name or email)
         if search:
             search_term = f"%{search.lower()}%"
@@ -237,7 +237,7 @@ class UserService:
                     func.lower(User.email).like(search_term)
                 )
             )
-        
+
         # Apply pending_fees filter (if provided, overrides status filter for fees)
         if pending_fees is not None:
             from app.models.payments import Payment
@@ -261,7 +261,7 @@ class UserService:
                     page_size=page_size,
                     has_next=False
                 )
-        
+
         # Apply status filter
         if status and status != "all":
             if status == "new_joins":
@@ -271,7 +271,7 @@ class UserService:
             else:
                 today = date.today()
                 user_ids_subquery = None
-                
+
                 if status == "active":
                     # Active plans: end_date >= today
                     user_ids_subquery = select(Membership.user_id).where(
@@ -298,7 +298,7 @@ class UserService:
                             Payment.status == "pending"
                         )
                     )
-                
+
                 if user_ids_subquery is not None:
                     user_ids = [uid for uid in self.session.exec(user_ids_subquery).all()]
                     if user_ids:
@@ -312,7 +312,7 @@ class UserService:
                             page_size=page_size,
                             has_next=False
                         )
-        
+
         # Apply sorting
         if sort_by == "name_asc":
             stmt = stmt.order_by(User.name.asc())
@@ -330,14 +330,14 @@ class UserService:
                     Membership.end_date >= today
                 )
             ).order_by(Membership.end_date.asc())
-            
+
             # For simplicity, sort by name for now
             # Full plan expiry sorting would require a more complex query
             stmt = stmt.order_by(User.name.asc())
         else:
             # Default: name ascending
             stmt = stmt.order_by(User.name.asc())
-        
+
         # Get total count - use same query but count instead of select
         count_stmt = select(func.count(User.id)).where(
             and_(
@@ -345,7 +345,7 @@ class UserService:
                 User.role_id == member_role.id
             )
         )
-        
+
         if search:
             search_term = f"%{search.lower()}%"
             count_stmt = count_stmt.where(
@@ -354,7 +354,7 @@ class UserService:
                     func.lower(User.email).like(search_term)
                 )
             )
-        
+
         if status and status != "all":
             if status == "new_joins":
                 thirty_days_ago = datetime.now() - timedelta(days=30)
@@ -388,7 +388,7 @@ class UserService:
                     )
                 else:
                     user_ids_subquery = None
-                
+
                 if user_ids_subquery is not None:
                     user_ids = [uid for uid in self.session.exec(user_ids_subquery).all()]
                     if user_ids:
@@ -402,20 +402,20 @@ class UserService:
                             page_size=page_size,
                             has_next=False
                         )
-        
+
         total = self.session.exec(count_stmt).first() or 0
-        
+
         # Apply pagination
         offset = (page - 1) * page_size
         stmt = stmt.limit(page_size).offset(offset)
-        
+
         # Execute query
         users = self.session.exec(stmt).all()
-        
+
         # Get plan info for each member
         members = []
         today = date.today()
-        
+
         for user in users:
             # Get active membership for this user
             membership_stmt = select(Membership).where(
@@ -426,21 +426,21 @@ class UserService:
                 )
             ).order_by(Membership.end_date.desc())
             membership = self.session.exec(membership_stmt).first()
-            
+
             plan_name = None
             plan_status = None
             plan_expiry_date = None
             days_left = None
-            
+
             if membership:
                 # Get plan details
                 plan_stmt = select(Plan).where(Plan.id == membership.plan_id)
                 plan = self.session.exec(plan_stmt).first()
-                
+
                 if plan:
                     plan_name = plan.name
                     plan_expiry_date = membership.end_date
-                    
+
                     # Calculate days left
                     if membership.end_date >= today:
                         days_left = (membership.end_date - today).days
@@ -463,7 +463,7 @@ class UserService:
                     )
                 ).order_by(Membership.end_date.desc())
                 expired_membership = self.session.exec(expired_stmt).first()
-                
+
                 if expired_membership:
                     plan_stmt = select(Plan).where(Plan.id == expired_membership.plan_id)
                     plan = self.session.exec(plan_stmt).first()
@@ -472,7 +472,7 @@ class UserService:
                     plan_status = "expired"
                     plan_expiry_date = expired_membership.end_date
                     days_left = 0
-            
+
             members.append(MemberListItemResponse(
                 id=user.id,
                 name=user.name,
@@ -483,9 +483,9 @@ class UserService:
                 plan_expiry_date=plan_expiry_date,
                 days_left=days_left
             ))
-        
+
         has_next = (page * page_size) < total
-        
+
         return MemberListResponse(
             members=members,
             total=total,
@@ -493,10 +493,10 @@ class UserService:
             page_size=page_size,
             has_next=has_next
         )
- 
+
     def update_user(self, user_id: str, user_update: UserUpdate) -> UserResponse:
         from app.models.role import Role as RoleModel
-        
+
         stmt = select(User).where(User.id == user_id)
         user = self.session.exec(stmt).first()
         if not user:
@@ -530,7 +530,7 @@ class UserService:
         # Handle plan_id updates
         if 'plan_id' in update_data:
             plan_id_value = update_data['plan_id']
-            
+
             if plan_id_value is None:
                 # Remove plan - end active memberships
                 today = date.today()
@@ -567,7 +567,7 @@ class UserService:
             if not role:
                 raise NotFoundError(detail=f"Role '{role_name}' not found")
             update_data['role_id'] = role.id
-        
+
         for field, value in update_data.items():
             setattr(user, field, value)
 
@@ -600,7 +600,7 @@ class UserService:
         # 1. Generate username if not provided
         if not user.user_name:
             user.user_name = self._generate_username(user.email, user.name)
-        
+
         # 2. Check if username exists and generate a unique one
         stmt = select(User).where(User.user_name == user.user_name)
         existing = self.session.exec(stmt).first()
@@ -613,7 +613,7 @@ class UserService:
                 stmt = select(User).where(User.user_name == user.user_name)
                 existing = self.session.exec(stmt).first()
                 counter += 1
-        
+
         # 3. Convert role name to role_id if role is provided
         user_dict = user.model_dump()
         if 'role' in user_dict and user_dict['role']:
@@ -625,17 +625,17 @@ class UserService:
             user_dict['role_id'] = role.id
         elif 'role_id' not in user_dict:
             raise NotFoundError(detail="Role is required when creating a user")
-        
+
         # 4. Hash password if provided
         if 'password' in user_dict:
             user_dict['password_hash'] = get_password_hash(user_dict.pop('password'))
-        
+
         db_user = User(**user_dict)
         self.session.add(db_user)
         self.session.commit()
         self.session.refresh(db_user)
         return UserResponse(**db_user.model_dump(exclude={"password_hash"}))
-    
+
     def _generate_username(self, email: str, name: str) -> str:
         """
         Generate a username from email or name
@@ -644,7 +644,7 @@ class UserService:
         import re
         import random
         import string
-        
+
         # Try to generate from email first (before @)
         if email:
             username = email.split('@')[0]
@@ -656,7 +656,7 @@ class UserService:
                 # If too short, pad with random characters
                 padding = ''.join(random.choices(string.ascii_lowercase + string.digits, k=4-len(username)))
                 return (username + padding).lower()
-        
+
         # Fallback to name
         if name:
             username = re.sub(r'[^a-zA-Z0-9]', '', name)
@@ -666,7 +666,7 @@ class UserService:
                 # If too short, pad with random characters
                 padding = ''.join(random.choices(string.ascii_lowercase + string.digits, k=4-len(username)))
                 return (username + padding).lower()
-        
+
         # Final fallback - generate a random username
         random_part = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
         return f"user{random_part}"
@@ -677,14 +677,14 @@ class UserService:
     ) -> AvailableMembersListResponse:
         """Get all members that are not assigned to any gym (gym_id is null) with optional search query"""
         from app.models.role import Role as RoleModel
-        
+
         # Get MEMBER role id
         member_role_stmt = select(RoleModel).where(RoleModel.name == "MEMBER")
         member_role = self.session.exec(member_role_stmt).first()
-        
+
         if not member_role:
             return AvailableMembersListResponse(members=[])
-        
+
         # Base query: members with gym_id = null and role = MEMBER
         stmt = select(User).where(
             and_(
@@ -692,7 +692,7 @@ class UserService:
                 User.gym_id.is_(None)
             )
         )
-        
+
         # Apply search query across all fields if provided
         if query:
             search_term = f"%{query.lower()}%"
@@ -704,11 +704,11 @@ class UserService:
                     User.phone.like(f"%{query}%")
                 )
             )
-        
+
         stmt = stmt.order_by(User.name.asc())
-        
+
         users = self.session.exec(stmt).all()
-        
+
         members = [
             AvailableMemberResponse(
                 id=user.id,
@@ -719,12 +719,12 @@ class UserService:
             )
             for user in users
         ]
-        
+
         return AvailableMembersListResponse(members=members)
 
     def add_member_to_gym(
-        self, 
-        member_user_name: str, 
+        self,
+        member_user_name: str,
         gym_id: str,
         plan_id: Optional[str] = None,
         new_duration: Optional[int] = None,
@@ -735,21 +735,21 @@ class UserService:
         from app.models.plan import Plan
         from app.models.membership import Membership
         from datetime import date, timedelta
-        
+
         # Find user by username
         stmt = select(User).where(User.user_name == member_user_name)
         user = self.session.exec(stmt).first()
-        
+
         if not user:
             raise UserNotFoundError(detail=f"User with username '{member_user_name}' not found")
-        
+
         # Verify user is a MEMBER
         member_role_stmt = select(RoleModel).where(RoleModel.name == "MEMBER")
         member_role = self.session.exec(member_role_stmt).first()
-        
+
         if not member_role or user.role_id != member_role.id:
             raise NotFoundError(detail=f"User '{member_user_name}' is not a member")
-        
+
         # Check if user is already assigned to a gym
         if user.gym_id is not None:
             if user.gym_id == gym_id:
@@ -757,12 +757,12 @@ class UserService:
                 return UserResponse(**user.model_dump(exclude={"password_hash"}))
             else:
                 raise NotFoundError(detail=f"User '{member_user_name}' is already assigned to another gym")
-        
+
         # Assign user to gym
         user.gym_id = gym_id
         self.session.commit()
         self.session.refresh(user)
-        
+
         # Create membership if plan_id is provided
         if plan_id:
             # Verify plan exists and belongs to the gym
@@ -773,16 +773,16 @@ class UserService:
                 )
             )
             plan = self.session.exec(plan_stmt).first()
-            
+
             if not plan:
                 raise NotFoundError(detail=f"Plan with id '{plan_id}' not found for this gym")
-            
+
             # Calculate start and end dates
             # Use new_duration if provided, otherwise use plan duration
             today = date.today()
             duration = new_duration if new_duration is not None else plan.duration_days
             end_date = today + timedelta(days=duration)
-            
+
             # Create membership
             membership = Membership(
                 user_id=user.id,
@@ -796,6 +796,6 @@ class UserService:
             )
             self.session.add(membership)
             self.session.commit()
-        
+
         return UserResponse(**user.model_dump(exclude={"password_hash"}))
 
