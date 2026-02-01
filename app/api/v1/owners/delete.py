@@ -13,6 +13,10 @@ from app.services.user_service import UserService
 from app.services.gym_service import GymService
 from app.services.plan_service import PlanService
 from app.services.membership_service import MembershipService
+import sys
+import logging
+
+logging.basicConfig(level=logging.INFO, stream=sys.stdout, format='%(asctime)s - %(levelname)s - %(message)s')
 
 router = APIRouter(prefix="/delete", tags=["owners"])
 
@@ -39,14 +43,14 @@ def delete_member(
     user_service = UserService(session=session)
     member = user_service.get_user(member_id)
 
-    
-    
+
+
     if member.gym_id != gym.id or member.role != "MEMBER":
         return failure_response(
             message="Member not found in your gym",
             status_code=status.HTTP_404_NOT_FOUND
         )
-    
+
     user_service.delete_user(member_id)
     return success_response(data=None, message="Member deleted successfully")
 
@@ -60,22 +64,24 @@ def deactivate_member_plan_and_remove_from_gym(
     """Deactivate member's plan and remove member from gym"""
     gym = get_owner_gym(current_user, session)
     if not gym:
+        logging.error("404 detail not found")
         return failure_response(
             message="No gym found for this owner",
             status_code=status.HTTP_404_NOT_FOUND
         )
-    
+
     user_service = UserService(session=session)
     member = user_service.get_user(member_id)
 
     role_stmt = select(Role).where(Role.name == "MEMBER")
-    role = session.exec(role_stmt).first()  
+    role = session.exec(role_stmt).first()
     if member.gym_id != gym.id or member.role_id != role.id:
+        logging.error("404 detail not found")
         return failure_response(
             message="Member not found in your gym",
             status_code=status.HTTP_404_NOT_FOUND
         )
-    
+
     # Deactivate all active memberships for this member
     today = date.today()
     active_memberships_stmt = select(Membership).where(
@@ -86,18 +92,18 @@ def deactivate_member_plan_and_remove_from_gym(
         )
     )
     active_memberships = session.exec(active_memberships_stmt).all()
-    
+
     for membership in active_memberships:
         membership.status = "expired"
         if membership.end_date > today:
             membership.end_date = today
-    
+
     # Remove member from gym (set gym_id and plan_id to None)
     member.gym_id = None
     member.plan_id = None
-    
+
     session.commit()
-    
+
     return success_response(data=None, message="Member plan deactivated and removed from gym successfully")
 
 
@@ -116,13 +122,13 @@ def delete_staff(
         )
     user_service = UserService(session=session)
     staff = user_service.get_user(staff_id)
-    
+
     if staff.gym_id != gym.id or staff.role != "STAFF":
         return failure_response(
             message="Staff not found in your gym",
             status_code=status.HTTP_404_NOT_FOUND
         )
-    
+
     user_service.delete_user(staff_id)
     return success_response(data=None, message="Staff deleted successfully")
 
@@ -142,13 +148,13 @@ def delete_trainer(
         )
     user_service = UserService(session=session)
     trainer = user_service.get_user(trainer_id)
-    
+
     if trainer.gym_id != gym.id or trainer.role != "TRAINER":
         return failure_response(
             message="Trainer not found in your gym",
             status_code=status.HTTP_404_NOT_FOUND
         )
-    
+
     user_service.delete_user(trainer_id)
     return success_response(data=None, message="Trainer deleted successfully")
 
@@ -168,13 +174,13 @@ def delete_plan(
         )
     plan_service = PlanService(session=session)
     existing_plan = plan_service.get_plan(plan_id)
-    
+
     if existing_plan.gym_id != gym.id:
         return failure_response(
             message="Plan not found in your gym",
             status_code=status.HTTP_404_NOT_FOUND
         )
-    
+
     plan_service.delete_plan(plan_id)
     return success_response(data=None, message="Plan deleted successfully")
 
@@ -194,13 +200,13 @@ def delete_membership(
         )
     membership_service = MembershipService(session=session)
     existing_membership = membership_service.get_membership(membership_id)
-    
+
     if existing_membership.gym_id != gym.id:
         return failure_response(
             message="Membership not found in your gym",
             status_code=status.HTTP_404_NOT_FOUND
         )
-    
+
     membership_service.delete_membership(membership_id)
     return success_response(data=None, message="Membership deleted successfully")
 
@@ -218,16 +224,16 @@ def delete_gym_rule(
             message="No gym found for this owner",
             status_code=status.HTTP_404_NOT_FOUND
         )
-    
+
     gym_service = GymService(session=session)
     existing_rule = gym_service.get_gym_rule(rule_id)
-    
+
     if existing_rule.gym_id != gym.id:
         return failure_response(
             message="Rule not found in your gym",
             status_code=status.HTTP_404_NOT_FOUND
         )
-    
+
     gym_service.delete_gym_rule(rule_id)
     return success_response(data=None, message="Gym rule deleted successfully")
 
