@@ -27,57 +27,81 @@ def get_owner_gym(current_user: User, session: SessionDep):
     return session.exec(stmt).first()
 
 
-
-@router.delete("/members/{member_id}/deactivate", response_model=APIResponse[dict])
+@router.delete(
+    "/members/{member_id}/deactivate",
+    response_model=APIResponse[dict]
+)
 def deactivate_member_plan_and_remove_from_gym(
     member_id: str,
     session: SessionDep = None,
     current_user: User = require_admin
 ):
     """Deactivate member's plan and remove member from gym"""
+
     gym = get_owner_gym(current_user, session)
     if not gym:
-        logging.error("404 detail not found")
         return failure_response(
             message="No gym found for this owner",
             status_code=status.HTTP_404_NOT_FOUND
         )
 
-    user_service = UserService(session=session)
-    member = user_service.get_user(member_id)
+    # Get the member user object
+    stmt = select(User).where(User.id == member_id)
+    member = session.exec(stmt).first()
+    if not member:
+        logging.info(f"Member {member_id} not found")
+        return failure_response(
+            message="Member not found",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
 
-    role_stmt = select(Role).where(Role.name == "MEMBER")
-    role = session.exec(role_stmt).first()
-    if member.gym_id != gym.id or member.role_id != role.id:
-        logging.error("404 detail not found")
+    logging.info(f"Member {member_id} gym_id: {member.gym_id}, gym.id: {gym.id}")
+
+    member_role_id = session.exec(
+        select(Role.id).where(Role.name == "MEMBER")
+    ).first()
+
+    if not member_role_id or member.gym_id != gym.id or member.role_id != member_role_id:
+        logging.info(f"Member not in gym: role_id {member.role_id}, member_role_id {member_role_id}, gym check {member.gym_id != gym.id}")
         return failure_response(
             message="Member not found in your gym",
             status_code=status.HTTP_404_NOT_FOUND
         )
 
-    # Deactivate all active memberships for this member
     today = date.today()
-    active_memberships_stmt = select(Membership).where(
-        and_(
+
+    memberships = session.exec(
+        select(Membership).where(
             Membership.user_id == member_id,
-            Membership.gym_id == gym.id,
-            Membership.status == "active"
+            Membership.gym_id == gym.id
         )
-    )
-    active_memberships = session.exec(active_memberships_stmt).all()
+    ).all()
 
-    for membership in active_memberships:
+    for membership in memberships:
         membership.status = "expired"
-        if membership.end_date > today:
-            membership.end_date = today
+        membership.end_date = min(membership.end_date, today)
 
-    # Remove member from gym (set gym_id and plan_id to None)
+    # Remove member from gym completely
     member.gym_id = None
     member.plan_id = None
 
-    session.commit()
+    logging.info(f"Set member {member_id} gym_id to None")
 
-    return success_response(data=None, message="Member plan deactivated and removed from gym successfully")
+    try:
+        session.commit()
+        logging.info(f"Committed deactivation for member {member_id}")
+    except Exception as e:
+        logging.error(f"Failed to commit deactivation for member {member_id}: {e}")
+        session.rollback()
+        return failure_response(
+            message="Failed to deactivate member",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+    return success_response(
+        data=None,
+        message="Member plan deactivated and removed from gym successfully"
+    )
 
 
 @router.delete("/staff/{staff_id}", response_model=APIResponse[dict])

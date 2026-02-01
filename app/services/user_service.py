@@ -1,13 +1,18 @@
 from typing import List, Optional
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from sqlmodel import select, func, and_, or_
+from sqlalchemy import exists
+from sqlmodel import select, func, and_, or_, desc, asc
 from app.core.exceptions import NotFoundError, UserNameAlreadyExistsError, UserNotFoundError
 from app.db.db import SessionDep
 from app.models.user import RoleEnum, User
 from app.models.role import Role
 from app.models.membership import Membership
 from app.models.plan import Plan
+from app.models.role import Role
+from app.models.membership import Membership
+from app.models.plan import Plan
+from app.models.payments import Payment
 from app.schemas.user import (
     UserCreate, UserResponse, UserUpdate,
     MemberListResponse, MemberListItemResponse,
@@ -59,7 +64,7 @@ class UserService:
                     Membership.status == "active",
                     Membership.end_date >= today
                 )
-            ).order_by(Membership.end_date.desc())
+            ).order_by(desc(Membership.end_date))
             active_membership = self.session.exec(membership_stmt).first()
 
             if active_membership and active_membership.plan_id:
@@ -97,7 +102,7 @@ class UserService:
                         Membership.gym_id == user.gym_id,
                         Membership.end_date < today
                     )
-                ).order_by(Membership.end_date.desc())
+                ).order_by(desc(Membership.end_date))
                 expired_membership = self.session.exec(expired_stmt).first()
 
                 if expired_membership and expired_membership.plan_id:
@@ -149,7 +154,7 @@ class UserService:
                 Membership.end_date >= today,
                 Membership.status == "active"
             )
-        ).order_by(Membership.end_date.desc())
+        ).order_by(desc(Membership.end_date))
         membership = self.session.exec(membership_stmt).first()
 
         current_plan = None
@@ -195,6 +200,7 @@ class UserService:
             created_at=user.created_at
         )
 
+
     def get_all_members(
         self,
         gym_id: str,
@@ -205,275 +211,138 @@ class UserService:
         page: int = 1,
         page_size: int = 20
     ) -> MemberListResponse:
-        """Get all members with filtering, sorting, and pagination"""
-        from app.models.role import Role as RoleModel
 
-        # Get MEMBER role id
-        member_role_stmt = select(RoleModel).where(RoleModel.name == "MEMBER")
-        member_role = self.session.exec(member_role_stmt).first()
-        if not member_role:
-            return MemberListResponse(
-                members=[],
-                total=0,
-                page=page,
-                page_size=page_size,
-                has_next=False
-            )
-
-        # Base query: all members in the gym
-        stmt = select(User).where(
-            and_(
-                User.gym_id == gym_id,
-                User.role_id == member_role.id
-            )
-        )
-
-        # Apply search filter (name or email)
-        if search:
-            search_term = f"%{search.lower()}%"
-            stmt = stmt.where(
-                or_(
-                    func.lower(User.name).like(search_term),
-                    func.lower(User.email).like(search_term)
-                )
-            )
-
-        # Apply pending_fees filter (if provided, overrides status filter for fees)
-        if pending_fees is not None:
-            from app.models.payments import Payment
-            # Get users with pending or overdue payments
-            today = date.today()
-            user_ids_subquery = select(func.distinct(Payment.user_id)).where(
-                and_(
-                    Payment.gym_id == gym_id,
-                    Payment.status == "pending"
-                )
-            )
-            user_ids = [uid for uid in self.session.exec(user_ids_subquery).all()]
-            if user_ids:
-                stmt = stmt.where(User.id.in_(user_ids))
-            else:
-                # No matching users, return empty
-                return MemberListResponse(
-                    members=[],
-                    total=0,
-                    page=page,
-                    page_size=page_size,
-                    has_next=False
-                )
-
-        # Apply status filter
-        if status and status != "all":
-            if status == "new_joins":
-                # New joins: created in last 30 days
-                thirty_days_ago = datetime.now() - timedelta(days=30)
-                stmt = stmt.where(User.created_at >= thirty_days_ago)
-            else:
-                today = date.today()
-                user_ids_subquery = None
-
-                if status == "active":
-                    # Active plans: end_date >= today
-                    user_ids_subquery = select(Membership.user_id).where(
-                        and_(
-                            Membership.gym_id == gym_id,
-                            Membership.status == "active",
-                            Membership.end_date >= today
-                        )
-                    )
-                elif status == "expired":
-                    # Expired plans: end_date < today
-                    user_ids_subquery = select(Membership.user_id).where(
-                        and_(
-                            Membership.gym_id == gym_id,
-                            Membership.end_date < today
-                        )
-                    )
-                elif status == "payment_pending":
-                    # Payment pending: users with pending payments
-                    from app.models.payments import Payment
-                    user_ids_subquery = select(func.distinct(Payment.user_id)).where(
-                        and_(
-                            Payment.gym_id == gym_id,
-                            Payment.status == "pending"
-                        )
-                    )
-
-                if user_ids_subquery is not None:
-                    user_ids = [uid for uid in self.session.exec(user_ids_subquery).all()]
-                    if user_ids:
-                        stmt = stmt.where(User.id.in_(user_ids))
-                    else:
-                        # No matching users, return empty
-                        return MemberListResponse(
-                            members=[],
-                            total=0,
-                            page=page,
-                            page_size=page_size,
-                            has_next=False
-                        )
-
-        # Apply sorting
-        if sort_by == "name_asc":
-            stmt = stmt.order_by(User.name.asc())
-        elif sort_by == "name_desc":
-            stmt = stmt.order_by(User.name.desc())
-        elif sort_by == "newest_joiners":
-            stmt = stmt.order_by(User.created_at.desc())
-        elif sort_by == "plan_expiry_soonest":
-            # Sort by plan expiry - get users with active memberships first, sorted by end_date
-            # Then users without memberships
-            today = date.today()
-            active_membership_users = select(Membership.user_id).where(
-                and_(
-                    Membership.gym_id == gym_id,
-                    Membership.end_date >= today
-                )
-            ).order_by(Membership.end_date.asc())
-
-            # For simplicity, sort by name for now
-            # Full plan expiry sorting would require a more complex query
-            stmt = stmt.order_by(User.name.asc())
-        else:
-            # Default: name ascending
-            stmt = stmt.order_by(User.name.asc())
-
-        # Get total count - use same query but count instead of select
-        count_stmt = select(func.count(User.id)).where(
-            and_(
-                User.gym_id == gym_id,
-                User.role_id == member_role.id
-            )
-        )
-
-        if search:
-            search_term = f"%{search.lower()}%"
-            count_stmt = count_stmt.where(
-                or_(
-                    func.lower(User.name).like(search_term),
-                    func.lower(User.email).like(search_term)
-                )
-            )
-
-        if status and status != "all":
-            if status == "new_joins":
-                thirty_days_ago = datetime.now() - timedelta(days=30)
-                count_stmt = count_stmt.where(User.created_at >= thirty_days_ago)
-            else:
-                # For active/expired/payment_pending, we already filtered stmt above
-                # So we need to apply same filter to count
-                today = date.today()
-                if status == "active":
-                    user_ids_subquery = select(Membership.user_id).where(
-                        and_(
-                            Membership.gym_id == gym_id,
-                            Membership.status == "active",
-                            Membership.end_date >= today
-                        )
-                    )
-                elif status == "expired":
-                    user_ids_subquery = select(Membership.user_id).where(
-                        and_(
-                            Membership.gym_id == gym_id,
-                            Membership.end_date < today
-                        )
-                    )
-                elif status == "payment_pending":
-                    from app.models.payments import Payment
-                    user_ids_subquery = select(func.distinct(Payment.user_id)).where(
-                        and_(
-                            Payment.gym_id == gym_id,
-                            Payment.status == "pending"
-                        )
-                    )
-                else:
-                    user_ids_subquery = None
-
-                if user_ids_subquery is not None:
-                    user_ids = [uid for uid in self.session.exec(user_ids_subquery).all()]
-                    if user_ids:
-                        count_stmt = count_stmt.where(User.id.in_(user_ids))
-                    else:
-                        total = 0
-                        return MemberListResponse(
-                            members=[],
-                            total=0,
-                            page=page,
-                            page_size=page_size,
-                            has_next=False
-                        )
-
-        total = self.session.exec(count_stmt).first() or 0
-
-        # Apply pagination
-        offset = (page - 1) * page_size
-        stmt = stmt.limit(page_size).offset(offset)
-
-        # Execute query
-        users = self.session.exec(stmt).all()
-
-        # Get plan info for each member
-        members = []
         today = date.today()
+        offset = (page - 1) * page_size
 
-        for user in users:
-            # Get active membership for this user
-            membership_stmt = select(Membership).where(
-                and_(
-                    Membership.user_id == user.id,
-                    Membership.gym_id == gym_id,
-                    Membership.end_date >= today
+        member_role_id = self.session.exec(
+            select(Role.id).where(Role.name == "MEMBER")
+        ).first()
+
+        if not member_role_id:
+            return MemberListResponse(
+                members=[], total=0, page=page, page_size=page_size, has_next=False
+            )
+
+        # ---- BASE FILTERS (HARD GUARANTEE) ----
+        base_filters = [
+            User.role_id == member_role_id,
+            User.gym_id == gym_id,
+            User.gym_id.is_not(None) # type: ignore
+        ]
+
+        # ---- SEARCH ----
+        if search:
+            term = f"%{search.lower()}%"
+            base_filters.append(
+                or_(
+                    func.lower(User.name).like(term),
+                    func.lower(User.email).like(term)
                 )
-            ).order_by(Membership.end_date.desc())
-            membership = self.session.exec(membership_stmt).first()
+            )
 
-            plan_name = None
-            plan_status = None
-            plan_expiry_date = None
-            days_left = None
+        # ---- STATUS FILTERS ----
+        if status and status != "all":
 
-            if membership:
-                # Get plan details
-                plan_stmt = select(Plan).where(Plan.id == membership.plan_id)
-                plan = self.session.exec(plan_stmt).first()
+            if status == "new_joins":
+                base_filters.append(
+                    User.created_at >= datetime.utcnow() - timedelta(days=30)
+                )
 
-                if plan:
-                    plan_name = plan.name
-                    plan_expiry_date = membership.end_date
+            elif status in {"active", "expired"}:
+                membership_conditions = [
+                    Membership.user_id == User.id,
+                    Membership.gym_id == gym_id
+                ]
 
-                    # Calculate days left
-                    if membership.end_date >= today:
-                        days_left = (membership.end_date - today).days
-                        if days_left <= 7:
-                            plan_status = "expiring_soon"
-                        else:
-                            plan_status = "active"
-                    else:
-                        plan_status = "expired"
-                        days_left = 0
+                if status == "active":
+                    membership_conditions += [
+                        Membership.status == "active",
+                        Membership.end_date >= today
+                    ]
                 else:
-                    plan_status = "expired" if membership.end_date < today else "active"
-            else:
-                # Check if user has any expired membership
-                expired_stmt = select(Membership).where(
-                    and_(
-                        Membership.user_id == user.id,
-                        Membership.gym_id == gym_id,
-                        Membership.end_date < today
-                    )
-                ).order_by(Membership.end_date.desc())
-                expired_membership = self.session.exec(expired_stmt).first()
+                    membership_conditions.append(Membership.end_date < today)
 
-                if expired_membership:
-                    plan_stmt = select(Plan).where(Plan.id == expired_membership.plan_id)
-                    plan = self.session.exec(plan_stmt).first()
-                    if plan:
-                        plan_name = plan.name
+                base_filters.append(
+                    exists().where(and_(*membership_conditions))
+                )
+
+            elif status == "payment_pending":
+                base_filters.append(
+                    exists().where(
+                        and_(
+                            Payment.user_id == User.id,
+                            Payment.gym_id == gym_id,
+                            Payment.status == "pending"
+                        )
+                    )
+                )
+
+        # ---- PENDING FEES OVERRIDE ----
+        if pending_fees is True:
+            base_filters.append(
+                exists().where(
+                    and_(
+                        Payment.user_id == User.id,
+                        Payment.gym_id == gym_id,
+                        Payment.status == "pending"
+                    )
+                )
+            )
+
+        # ---- MAIN QUERY ----
+        stmt = (
+            select(User, Membership, Plan)
+            .join(
+                Membership,
+                and_(
+                    Membership.user_id == User.id,
+                    Membership.gym_id == gym_id
+                ),
+                isouter=True
+            )
+            .join(Plan, Plan.id == Membership.plan_id, isouter=True) # type: ignore
+            .where(and_(*base_filters))
+        )
+
+        # ---- SORTING ----
+        if sort_by == "name_desc":
+            stmt = stmt.order_by(desc(User.name))
+        elif sort_by == "newest_joiners":
+            stmt = stmt.order_by(desc(User.created_at))
+        else:
+            stmt = stmt.order_by(asc(User.name))
+
+        # ---- COUNT ----
+        total = self.session.exec(
+            select(func.count(func.distinct(User.id))).where(and_(*base_filters))
+        ).first() or 0
+
+        # ---- PAGINATION ----
+        rows = self.session.exec(
+            stmt.limit(page_size).offset(offset)
+        ).all()
+
+        members = {}
+        for user, membership, plan in rows:
+
+            if user.id in members:
+                continue
+
+            plan_name = plan_status = plan_expiry_date = days_left = None
+
+            if membership and membership.end_date:
+                plan_name = plan.name if plan else None
+                plan_expiry_date = membership.end_date
+
+                if membership.end_date >= today:
+                    days_left = (membership.end_date - today).days
+                    plan_status = "expiring_soon" if days_left <= 7 else "active"
+                else:
                     plan_status = "expired"
-                    plan_expiry_date = expired_membership.end_date
                     days_left = 0
 
-            members.append(MemberListItemResponse(
+            members[user.id] = MemberListItemResponse(
                 id=user.id,
                 name=user.name,
                 email=user.email,
@@ -482,17 +351,17 @@ class UserService:
                 plan_status=plan_status,
                 plan_expiry_date=plan_expiry_date,
                 days_left=days_left
-            ))
-
-        has_next = (page * page_size) < total
+            )
 
         return MemberListResponse(
-            members=members,
+            members=list(members.values()),
             total=total,
             page=page,
             page_size=page_size,
-            has_next=has_next
+            has_next=(page * page_size) < total
         )
+
+
 
     def update_user(self, user_id: str, user_update: UserUpdate) -> UserResponse:
         from app.models.role import Role as RoleModel
@@ -548,13 +417,15 @@ class UserService:
             else:
                 # Update plan_id - update active membership's plan_id
                 today = date.today()
+
                 active_membership_stmt = select(Membership).where(
                     and_(
                         Membership.user_id == user_id,
                         Membership.status == "active",
                         Membership.end_date >= today
                     )
-                ).order_by(Membership.end_date.desc())
+                ).order_by(desc(Membership.end_date))
+
                 active_membership = self.session.exec(active_membership_stmt).first()
                 if active_membership:
                     active_membership.plan_id = plan_id_value
@@ -689,23 +560,23 @@ class UserService:
         stmt = select(User).where(
             and_(
                 User.role_id == member_role.id,
-                User.gym_id.is_(None)
+                User.gym_id == None
             )
         )
 
         # Apply search query across all fields if provided
         if query:
             search_term = f"%{query.lower()}%"
-            stmt = stmt.where(
+            stmt = stmt.where(  # type: ignore [arg-type]
                 or_(
                     func.lower(User.name).like(search_term),
                     func.lower(User.email).like(search_term),
                     func.lower(User.user_name).like(search_term),
-                    User.phone.like(f"%{query}%")
+                    User.phone.like(f"%{query}%")  # type: ignore [attr-defined]
                 )
             )
 
-        stmt = stmt.order_by(User.name.asc())
+        stmt = stmt.order_by(asc(User.name))
 
         users = self.session.exec(stmt).all()
 
