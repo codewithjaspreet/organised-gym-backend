@@ -27,33 +27,6 @@ def get_owner_gym(current_user: User, session: SessionDep):
     return session.exec(stmt).first()
 
 
-@router.delete("/members/{member_id}", response_model=APIResponse[dict])
-def delete_member(
-    member_id: str,
-    session: SessionDep = None,
-    current_user: User = require_admin
-):
-    """Delete a member"""
-    gym = get_owner_gym(current_user, session)
-    if not gym:
-        return failure_response(
-            message="No gym found for this owner",
-            status_code=status.HTTP_404_NOT_FOUND
-        )
-    user_service = UserService(session=session)
-    member = user_service.get_user(member_id)
-
-
-
-    if member.gym_id != gym.id or member.role != "MEMBER":
-        return failure_response(
-            message="Member not found in your gym",
-            status_code=status.HTTP_404_NOT_FOUND
-        )
-
-    user_service.delete_user(member_id)
-    return success_response(data=None, message="Member deleted successfully")
-
 
 @router.delete("/members/{member_id}/deactivate", response_model=APIResponse[dict])
 def deactivate_member_plan_and_remove_from_gym(
