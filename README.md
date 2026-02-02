@@ -2,7 +2,7 @@
 
 A comprehensive gym management system built with FastAPI, providing role-based access control for gym owners, members, trainers, and staff.
 
-## Tech Stack
+## Tech Stacks
 
 - **Framework**: FastAPI
 - **Database**: PostgreSQL
