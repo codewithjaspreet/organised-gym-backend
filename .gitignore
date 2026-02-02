@@ -13,3 +13,4 @@ firebase/
 
 # macOS
 .DS_Store
+app/firebase/organised_gym_service_account.json
