@@ -29,4 +29,4 @@ run:
     CLOUDINARY_CLOUD_API_KEY: "arn:aws:secretsmanager:ap-south-1:324512687832:secret:og-db-secrets-NIaDV3:CLOUDINARY_CLOUD_API_KEY::"
     CLOUDINARY_CLOUD_API_SECRET: "arn:aws:secretsmanager:ap-south-1:324512687832:secret:og-db-secrets-NIaDV3:CLOUDINARY_CLOUD_API_SECRET::"
     CLOUDINARY_URL: "arn:aws:secretsmanager:ap-south-1:324512687832:secret:og-db-secrets-NIaDV3:CLOUDINARY_URL::"
-    FIREBASE_SERVICE_ACCOUNT_JSON_BASE64: "arn:aws:secretsmanager:ap-south-1:324512687832:secret:og-db-secrets-NIaDV3:FIREBASE_SERVICE_ACCOUNT_JSON_BASE64::"
+    FIREBASE_BASE_64: "arn:aws:secretsmanager:ap-south-1:324512687832:secret:og-db-secrets-NIaDV3:FIREBASE_BASE_64::"

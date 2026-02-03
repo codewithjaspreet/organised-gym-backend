@@ -90,6 +90,8 @@ def get_fcm_access_token() -> str:
     decoded_json = base64.b64decode(settings.firebase_base_64).decode("utf-8")
     info = json.loads(decoded_json)
 
+    logger.debug(f"loaded info is {info}")
+
     credentials = service_account.Credentials.from_service_account_info(
         info,
         scopes=["https://www.googleapis.com/auth/firebase.messaging"]
