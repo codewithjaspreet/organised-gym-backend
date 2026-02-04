@@ -16,15 +16,7 @@ conf = ConnectionConfig(
     VALIDATE_CERTS=True,
     TEMPLATE_FOLDER=Path("app/templates"),
 )
-# SMTP_HOST=smtp.zoho.in
-# SMTP_PORT=587
-# SMTP_SECURE=false
 
-# SMTP_USER=noreply@organisedgym.com
-# SMTP_PASSWORD=JSg4DX14szPd
-
-# NO_REPLY_EMAIL=noreply@organisedgym.com
-# SUPPORT_EMAIL=support@organisedgym.com
 async def send_reset_password_mail(
     recipient_email: str,
     user_name: str,
