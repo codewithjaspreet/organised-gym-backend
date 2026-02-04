@@ -26,7 +26,7 @@ class UserCreate(BaseModel):
     device_token: Optional[str] = None
     app_version: Optional[str] = None
     platform: Optional[str] = None
-    
+
     @field_validator('platform')
     @classmethod
     def validate_platform(cls, v):
@@ -119,10 +119,10 @@ class MemberDetailResponse(BaseModel):
     dob: date
     photo_url: Optional[str] = None
     role: str
-    
+
     # Current Plan Information
     current_plan: Optional[CurrentPlanResponse] = None
-    
+
     # Personal Details
     address_line1: str
     address_line2: Optional[str] = None
@@ -130,7 +130,7 @@ class MemberDetailResponse(BaseModel):
     state: str
     postal_code: str
     country: str
-    
+
     created_at: datetime
 
 
@@ -155,3 +155,11 @@ class AvailableMembersListResponse(BaseModel):
     members: List[AvailableMemberResponse] = Field(description="List of available members")
 
 
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(min_length=8)

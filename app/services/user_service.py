@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from sqlalchemy import exists
@@ -19,7 +19,11 @@ from app.schemas.user import (
     MemberDetailResponse, CurrentPlanResponse,
     AvailableMembersListResponse, AvailableMemberResponse
 )
-from app.core.security import get_password_hash
+from app.core.security import create_reset_token, get_password_hash, verify_reset_token
+from app.utils.emails import send_reset_password_mail
+
+RESET_TOKEN_EXPIRE_MINUTES = 10
+
 
 class UserService:
 
@@ -669,4 +673,45 @@ class UserService:
             self.session.commit()
 
         return UserResponse(**user.model_dump(exclude={"password_hash"}))
+
+    def get_reset_link_data(
+        self,
+        email: str,
+        base_url: str,
+    ) -> Optional[Tuple[str, str, str, int]]:
+        """
+        Returns (recipient_email, user_name, reset_url, expire_minutes) if user exists.
+        Silent fail if user does not exist (security best practice).
+        """
+        stmt = select(User).where(User.email == email)
+        user = self.session.exec(stmt).first()
+        if not user:
+            return None
+        token = create_reset_token(email, RESET_TOKEN_EXPIRE_MINUTES)
+        reset_url = f"{base_url}v1/auth/reset-password?token={token}"
+        return (email, user.name, reset_url, RESET_TOKEN_EXPIRE_MINUTES)
+
+    def reset_password(
+        self,
+        token: str,
+        new_password: str,
+    ) -> User:
+        """
+        Verifies reset token and updates user password.
+        Returns the user on success.
+        """
+        email = verify_reset_token(token)
+        if not email:
+            raise ValueError("Invalid or expired reset token")
+
+        stmt = select(User).where(User.email == email)
+        user = self.session.exec(stmt).first()
+
+        if not user:
+            raise ValueError("User not found")
+
+        user.password_hash = get_password_hash(new_password)
+        self.session.add(user)
+        self.session.commit()
+        return user
 

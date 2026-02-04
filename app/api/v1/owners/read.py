@@ -394,7 +394,7 @@ def get_daily_attendance(
     filter_status: Optional[str] = Query(
         None,
         description="Filter by status: 'present', 'absent', or None for all",
-        regex="^(present|absent)$"
+        pattern="^(present|absent)$"
     ),
     search: Optional[str] = Query(
         None,

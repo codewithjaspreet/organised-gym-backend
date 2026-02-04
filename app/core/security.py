@@ -115,3 +115,18 @@ def get_current_user(
         )
 
     return payload
+
+
+
+def create_reset_token(email: str, expire_minutes: int = 10):
+    expire = datetime.utcnow() + timedelta(minutes=expire_minutes)
+    payload = {"sub": email, "exp": expire}
+    return jwt.encode(payload, config.settings.secret_key, algorithm=config.settings.algorithm)
+
+
+def verify_reset_token(token: str):
+    try:
+        payload = jwt.decode(token, config.settings.secret_key, algorithms=[config.settings.algorithm])
+        return payload.get("sub")
+    except JWTError:
+        return None
