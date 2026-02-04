@@ -108,6 +108,24 @@ fastapi dev main.py
 
 The API will be available at `http://localhost:8000`
 
+### Running with Docker (local)
+
+Inside the container, `localhost` is the container itself, not your machine. So the app cannot use `DB_HOST=localhost` to reach a database on your host (e.g. an SSH tunnel to RDS).
+
+- **With SSH tunnel to RDS:** Start the tunnel so your host listens on `127.0.0.1:5432`, then run the container and override `DB_HOST` so it points at the host:
+
+  **macOS / Windows:**
+  ```bash
+  docker run -p 8080:8080 --env-file .env -e DB_HOST=host.docker.internal og-test
+  ```
+
+  **Linux:**
+  ```bash
+  docker run -p 8080:8080 --add-host=host.docker.internal:host-gateway --env-file .env -e DB_HOST=host.docker.internal og-test
+  ```
+
+- **With local Postgres on host:** Use the same `-e DB_HOST=host.docker.internal` (and `--add-host` on Linux) so the container connects to Postgres on your machine.
+
 ## Environment Variables
 
 | Variable | Description | Required |

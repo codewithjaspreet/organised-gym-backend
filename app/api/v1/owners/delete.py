@@ -29,14 +29,16 @@ def get_owner_gym(current_user: User, session: SessionDep):
 
 @router.delete(
     "/members/{member_id}/deactivate",
-    response_model=APIResponse[dict]
+    response_model=APIResponse[dict],
+    operation_id="deactivate_member_plan_and_remove_from_gym",
+    summary="Deactivate member's plan and remove member from gym",
 )
 def deactivate_member_plan_and_remove_from_gym(
     member_id: str,
-    session: SessionDep = None,
-    current_user: User = require_admin
+    session: SessionDep,
+    current_user: User = require_admin,
 ):
-    """Deactivate member's plan and remove member from gym"""
+    """Deactivate member's plan and remove member from gym."""
 
     gym = get_owner_gym(current_user, session)
     if not gym:

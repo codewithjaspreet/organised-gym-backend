@@ -13,20 +13,38 @@ run:
 
   env:
     APP_NAME: "Organised Gym"
+
     ALGORITHM: "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: "43200"
     REFRESH_TOKEN_EXPIRE_DAYS: "7"
 
     AWS_REGION: "ap-south-1"
+
+    # RDS hostname (required in AWS; do not use localhost)
     DB_HOST: "og-gym-db.cz40qy680dya.ap-south-1.rds.amazonaws.com"
     DB_PORT: "5432"
     DB_NAME: "og_gym"
-    DB_USER: "apprunner_user"
+    DB_USER: "postgres"
+    # DB_USER: "apprunner_user"
+
+    SMTP_HOST: "smtp.zoho.in"
+    SMTP_PORT: "587"
+    SMTP_SECURE: "false"
+
+    SMTP_USER: "noreply@organisedgym.com"
+    NO_REPLY_EMAIL: "noreply@organisedgym.com"
+    SUPPORT_EMAIL: "support@organisedgym.com"
 
   secrets:
     SECRET_KEY: "arn:aws:secretsmanager:ap-south-1:324512687832:secret:og-db-secrets-NIaDV3:SECRET_KEY::"
+
+    DB_PASSWORD: "arn:aws:secretsmanager:ap-south-1:324512687832:secret:og-db-secrets-NIaDV3:DB_PASSWORD::"
+
+    SMTP_PASSWORD: "arn:aws:secretsmanager:ap-south-1:324512687832:secret:og-db-secrets-NIaDV3:SMTP_PASSWORD::"
+
     CLOUDINARY_CLOUD_NAME: "arn:aws:secretsmanager:ap-south-1:324512687832:secret:og-db-secrets-NIaDV3:CLOUDINARY_CLOUD_NAME::"
     CLOUDINARY_CLOUD_API_KEY: "arn:aws:secretsmanager:ap-south-1:324512687832:secret:og-db-secrets-NIaDV3:CLOUDINARY_CLOUD_API_KEY::"
     CLOUDINARY_CLOUD_API_SECRET: "arn:aws:secretsmanager:ap-south-1:324512687832:secret:og-db-secrets-NIaDV3:CLOUDINARY_CLOUD_API_SECRET::"
     CLOUDINARY_URL: "arn:aws:secretsmanager:ap-south-1:324512687832:secret:og-db-secrets-NIaDV3:CLOUDINARY_URL::"
+
     FIREBASE_BASE_64: "arn:aws:secretsmanager:ap-south-1:324512687832:secret:og-db-secrets-NIaDV3:FIREBASE_BASE_64::"

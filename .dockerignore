@@ -1,0 +1,22 @@
+# Don't bundle local env into image (use -e or env at run time)
+.env
+.env.*
+!.env.example
+
+# Git and IDE
+.git
+.gitignore
+.cursor
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.coverage
+htmlcov
+*.egg-info
+dist
+build
+
+# Docs and misc
+*.md
+.DS_Store
