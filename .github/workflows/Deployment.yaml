@@ -1,0 +1,327 @@
+name: Build and Deploy to App Runner (Enhanced)
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - 'LICENSE'
+      - 'docs/**'
+  
+  workflow_dispatch: 
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REPOSITORY: organised-gym-backend
+  APP_RUNNER_SERVICE: org-gym-2
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Check if ECR repository exists
+        id: check-repo
+        run: |
+          if aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} 2>/dev/null; then
+            echo "Repository exists"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Repository does not exist, creating..."
+            aws ecr create-repository \
+              --repository-name ${{ env.ECR_REPOSITORY }} \
+              --region ${{ env.AWS_REGION }} \
+              --image-scanning-configuration scanOnPush=true \
+              --encryption-configuration encryptionType=AES256
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build, tag, and push image to Amazon ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: latest
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          # Build Docker image with cache
+          docker buildx build \
+            --cache-from $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+            --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            --tag $ECR_REGISTRY/$ECR_REPOSITORY:$COMMIT_SHA \
+            --tag $ECR_REGISTRY/$ECR_REPOSITORY:build-${{ github.run_number }} \
+            --push \
+            .
+          
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "commit_image=$ECR_REGISTRY/$ECR_REPOSITORY:$COMMIT_SHA" >> $GITHUB_OUTPUT
+          echo "Image built and pushed successfully"
+
+      - name: Scan image for vulnerabilities
+        continue-on-error: true
+        run: |
+          echo "Scanning image for vulnerabilities..."
+          aws ecr start-image-scan \
+            --repository-name ${{ env.ECR_REPOSITORY }} \
+            --image-id imageTag=latest \
+            --region ${{ env.AWS_REGION }} || true
+
+      - name: Get App Runner Service ARN
+        id: get-service
+        run: |
+          SERVICE_ARN=$(aws apprunner list-services \
+            --region ${{ env.AWS_REGION }} \
+            --query "ServiceSummaryList[?ServiceName=='${{ env.APP_RUNNER_SERVICE }}'].ServiceArn" \
+            --output text)
+          
+          if [ -z "$SERVICE_ARN" ]; then
+            echo "❌ Error: App Runner service '${{ env.APP_RUNNER_SERVICE }}' not found"
+            echo "Available services:"
+            aws apprunner list-services --region ${{ env.AWS_REGION }} --query 'ServiceSummaryList[].ServiceName'
+            exit 1
+          fi
+          
+          echo "service_arn=$SERVICE_ARN" >> $GITHUB_OUTPUT
+          echo "✅ Found service: $SERVICE_ARN"
+
+      - name: Get current service configuration
+        id: current-config
+        run: |
+          CURRENT_IMAGE=$(aws apprunner describe-service \
+            --service-arn ${{ steps.get-service.outputs.service_arn }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Service.SourceConfiguration.ImageRepository.ImageIdentifier' \
+            --output text)
+          
+          echo "current_image=$CURRENT_IMAGE" >> $GITHUB_OUTPUT
+          echo "Current image: $CURRENT_IMAGE"
+
+      - name: Update App Runner service with new image
+        id: update-service
+        run: |
+          echo "🔄 Updating App Runner service with new image..."
+          
+          # Get current service configuration
+          SERVICE_CONFIG=$(aws apprunner describe-service \
+            --service-arn ${{ steps.get-service.outputs.service_arn }} \
+            --region ${{ env.AWS_REGION }})
+          
+          # Extract necessary configuration details
+          AUTO_DEPLOYMENTS_ENABLED=$(echo $SERVICE_CONFIG | jq -r '.Service.SourceConfiguration.AutoDeploymentsEnabled')
+          IMAGE_REPO_TYPE=$(echo $SERVICE_CONFIG | jq -r '.Service.SourceConfiguration.ImageRepository.ImageRepositoryType')
+          PORT=$(echo $SERVICE_CONFIG | jq -r '.Service.SourceConfiguration.ImageRepository.ImageConfiguration.Port // "8080"')
+          
+          # Update the service with the new image
+          aws apprunner update-service \
+            --service-arn ${{ steps.get-service.outputs.service_arn }} \
+            --region ${{ env.AWS_REGION }} \
+            --source-configuration "{
+              \"ImageRepository\": {
+                \"ImageIdentifier\": \"${{ steps.build-image.outputs.commit_image }}\",
+                \"ImageRepositoryType\": \"$IMAGE_REPO_TYPE\",
+                \"ImageConfiguration\": {
+                  \"Port\": \"$PORT\"
+                }
+              },
+              \"AutoDeploymentsEnabled\": $AUTO_DEPLOYMENTS_ENABLED
+            }" \
+            --no-cli-pager
+          
+          echo "✅ Service update initiated with image: ${{ steps.build-image.outputs.commit_image }}"
+
+      - name: Wait for deployment
+        timeout-minutes: 15
+        run: |
+          echo "⏳ Waiting for deployment to complete..."
+          
+          # Poll the service status until it's RUNNING
+          MAX_ATTEMPTS=90
+          ATTEMPT=0
+          
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            STATUS=$(aws apprunner describe-service \
+              --service-arn ${{ steps.get-service.outputs.service_arn }} \
+              --region ${{ env.AWS_REGION }} \
+              --query 'Service.Status' \
+              --output text)
+            
+            echo "Current status: $STATUS (attempt $((ATTEMPT + 1))/$MAX_ATTEMPTS)"
+            
+            if [ "$STATUS" = "RUNNING" ]; then
+              # Verify the image has been updated
+              DEPLOYED_IMAGE=$(aws apprunner describe-service \
+                --service-arn ${{ steps.get-service.outputs.service_arn }} \
+                --region ${{ env.AWS_REGION }} \
+                --query 'Service.SourceConfiguration.ImageRepository.ImageIdentifier' \
+                --output text)
+              
+              echo "Deployed image: $DEPLOYED_IMAGE"
+              echo "Expected image: ${{ steps.build-image.outputs.commit_image }}"
+              
+              if [[ "$DEPLOYED_IMAGE" == *"${{ github.sha }}"* ]]; then
+                echo "✅ Deployment completed successfully with correct image!"
+                exit 0
+              else
+                echo "⚠️ Service is running but image may not be updated yet, waiting..."
+              fi
+            elif [ "$STATUS" = "OPERATION_IN_PROGRESS" ]; then
+              echo "⏳ Deployment in progress..."
+            elif [ "$STATUS" = "CREATE_FAILED" ] || [ "$STATUS" = "DELETE_FAILED" ] || [ "$STATUS" = "UPDATE_FAILED_ROLLBACK_COMPLETE" ]; then
+              echo "❌ Deployment failed with status: $STATUS"
+              exit 1
+            fi
+            
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 10
+          done
+          
+          echo "❌ Deployment timed out after $((MAX_ATTEMPTS * 10)) seconds"
+          exit 1
+
+      - name: Get deployment details
+        id: deployment-details
+        run: |
+          SERVICE_URL=$(aws apprunner describe-service \
+            --service-arn ${{ steps.get-service.outputs.service_arn }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Service.ServiceUrl' \
+            --output text)
+          
+          SERVICE_STATUS=$(aws apprunner describe-service \
+            --service-arn ${{ steps.get-service.outputs.service_arn }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Service.Status' \
+            --output text)
+          
+          DEPLOYED_IMAGE=$(aws apprunner describe-service \
+            --service-arn ${{ steps.get-service.outputs.service_arn }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Service.SourceConfiguration.ImageRepository.ImageIdentifier' \
+            --output text)
+          
+          echo "service_url=$SERVICE_URL" >> $GITHUB_OUTPUT
+          echo "service_status=$SERVICE_STATUS" >> $GITHUB_OUTPUT
+          echo "deployed_image=$DEPLOYED_IMAGE" >> $GITHUB_OUTPUT
+          
+          echo "🌐 Service URL: https://$SERVICE_URL"
+          echo "📊 Service Status: $SERVICE_STATUS"
+          echo "🖼️  Deployed Image: $DEPLOYED_IMAGE"
+
+      - name: Health check
+        timeout-minutes: 5
+        run: |
+          echo "🏥 Running health check..."
+          SERVICE_URL="${{ steps.deployment-details.outputs.service_url }}"
+          
+          # Wait for service to be ready
+          for i in {1..30}; do
+            if curl -f -s --max-time 10 "https://$SERVICE_URL/health" > /dev/null 2>&1 || \
+               curl -f -s --max-time 10 "https://$SERVICE_URL/" > /dev/null 2>&1; then
+              echo "✅ Health check passed!"
+              exit 0
+            fi
+            echo "Attempt $i/30: Service not ready yet, waiting..."
+            sleep 10
+          done
+          
+          echo "⚠️  Health check did not pass, but deployment completed"
+          exit 0
+
+      - name: Create deployment summary
+        if: always()
+        run: |
+          echo "# 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Status" >> $GITHUB_STEP_SUMMARY
+          echo "- **Result**: ${{ job.status == 'success' && '✅ Successful' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Service Status**: ${{ steps.deployment-details.outputs.service_status }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Deployment Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **New Image**: \`${{ steps.build-image.outputs.commit_image }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployed Image**: \`${{ steps.deployment-details.outputs.deployed_image }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Previous Image**: \`${{ steps.current-config.outputs.current_image }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build Number**: #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Service Information" >> $GITHUB_STEP_SUMMARY
+          echo "- **Service Name**: ${{ env.APP_RUNNER_SERVICE }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Region**: ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL**: https://${{ steps.deployment-details.outputs.service_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Links" >> $GITHUB_STEP_SUMMARY
+          echo "- [View Service](https://console.aws.amazon.com/apprunner/home?region=${{ env.AWS_REGION }}#/services/${{ steps.get-service.outputs.service_arn }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [View Logs](https://console.aws.amazon.com/cloudwatch/home?region=${{ env.AWS_REGION }}#logsV2:log-groups)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Deployment failed!"
+          echo "Check the logs and consider rolling back to previous version:"
+          echo "Previous image: ${{ steps.current-config.outputs.current_image }}"
+
+  cleanup:
+    name: Cleanup old images
+    runs-on: ubuntu-latest
+    needs: build-and-deploy
+    if: success()
+    
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Clean up old ECR images
+        run: |
+          echo "🧹 Cleaning up old images (keeping last 10)..."
+          
+          # Get images older than the last 10
+          OLD_IMAGES=$(aws ecr describe-images \
+            --repository-name ${{ env.ECR_REPOSITORY }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'sort_by(imageDetails,& imagePushedAt)[:-10].imageDigest' \
+            --output text)
+          
+          if [ -z "$OLD_IMAGES" ]; then
+            echo "No old images to clean up"
+          else
+            for digest in $OLD_IMAGES; do
+              echo "Deleting image with digest: $digest"
+              aws ecr batch-delete-image \
+                --repository-name ${{ env.ECR_REPOSITORY }} \
+                --region ${{ env.AWS_REGION }} \
+                --image-ids imageDigest=$digest || true
+            done
+            echo "✅ Cleanup completed"
+          fi
