@@ -40,6 +40,15 @@ def _build_database_url() -> str:
     
     if password:
         print("🔑 Using password authentication", file=sys.stderr)
+
+        print(f"postgresql+psycopg2://{settings.db_user}:"
+            f"{password}@"
+            f"{settings.db_host}:"
+            f"{settings.db_port}/"
+            f"{settings.db_name}" ) 
+        
+
+        # return f'postgresql+psycopg2://postgres:>Zz6WGoOiBi2RFg9Cud3>7!y:jjh@localhost:5432/postgres'
         return (
             f"postgresql+psycopg2://{settings.db_user}:"
             f"{password}@"
@@ -47,6 +56,8 @@ def _build_database_url() -> str:
             f"{settings.db_port}/"
             f"{settings.db_name}"
         )
+
+        
 
     print("🔑 Using IAM authentication", file=sys.stderr)
     token = _generate_iam_token()

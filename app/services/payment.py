@@ -396,39 +396,57 @@ class PaymentService:
         gym_id: str,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
-        filter_status: str = "all",
     ) -> GymRevenueResponse:
-        """
-        Fetch gym revenue efficiently. Filter by date range and/or payment status.
-        filter_status: "received" (verified), "pending", or "all".
-        """
+
         conditions = [Payment.gym_id == gym_id]
 
-        if start_date is not None:
-            conditions.append(Payment.created_at >= datetime.combine(start_date, datetime.min.time()))
-        if end_date is not None:
-            # Include full end_date day (before start of next day)
-            conditions.append(Payment.created_at < datetime.combine(end_date + timedelta(days=1), datetime.min.time()))
+        if start_date:
+            conditions.append(
+                Payment.created_at >= datetime.combine(start_date, datetime.min.time())
+            )
 
-        if filter_status == "received":
-            conditions.append(Payment.status == "verified")
-        elif filter_status == "pending":
-            conditions.append(Payment.status == "pending")
+        if end_date:
+            conditions.append(
+                Payment.created_at < datetime.combine(end_date + timedelta(days=1), datetime.min.time())
+            )
 
-        sum_stmt = select(func.coalesce(func.sum(Payment.amount), 0)).where(and_(*conditions))
-        count_stmt = select(func.count(Payment.id)).where(and_(*conditions))
-        total_amount = self.session.exec(sum_stmt).first()
-        count = self.session.exec(count_stmt).first() or 0
-        if total_amount is None:
-            total_amount = Decimal("0")
-        if not isinstance(total_amount, Decimal):
-            total_amount = Decimal(str(total_amount))
+        # RECEIVED (verified)
+        received_sum_stmt = select(
+            func.coalesce(func.sum(Payment.amount), 0)
+        ).where(
+            and_(*conditions, Payment.status == "verified")
+        )
+
+        received_count_stmt = select(
+            func.count(Payment.id)
+        ).where(
+            and_(*conditions, Payment.status == "verified")
+        )
+
+        # PENDING
+        pending_sum_stmt = select(
+            func.coalesce(func.sum(Payment.amount), 0)
+        ).where(
+            and_(*conditions, Payment.status == "pending")
+        )
+
+        pending_count_stmt = select(
+            func.count(Payment.id)
+        ).where(
+            and_(*conditions, Payment.status == "pending")
+        )
+
+        received_amount = Decimal(str(self.session.exec(received_sum_stmt).first() or 0))
+        pending_amount = Decimal(str(self.session.exec(pending_sum_stmt).first() or 0))
+
+        received_count = self.session.exec(received_count_stmt).first() or 0
+        pending_count = self.session.exec(pending_count_stmt).first() or 0
 
         return GymRevenueResponse(
-            total_amount=total_amount,
-            count=count,
-            filter_status=filter_status,
+            received_amount=received_amount,
+            pending_amount=pending_amount,
+            received_count=received_count,
+            pending_count=pending_count,
             start_date=start_date.isoformat() if start_date else None,
             end_date=end_date.isoformat() if end_date else None,
         )
-

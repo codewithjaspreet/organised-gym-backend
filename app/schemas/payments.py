@@ -74,10 +74,9 @@ class PendingPaymentListResponse(BaseModel):
 
 
 class GymRevenueResponse(BaseModel):
-    """Gym revenue summary with optional filters (date range, received/pending)."""
-    total_amount: Decimal = Field(description="Total payment amount in the filtered set")
-    count: int = Field(description="Number of payments in the filtered set")
-    filter_status: str = Field(description="Filter applied: received, pending, or all")
-    start_date: Optional[str] = Field(default=None, description="Start date of range (YYYY-MM-DD)")
-    end_date: Optional[str] = Field(default=None, description="End date of range (YYYY-MM-DD)")
-
+    received_amount: Decimal
+    pending_amount: Decimal
+    received_count: int
+    pending_count: int
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None

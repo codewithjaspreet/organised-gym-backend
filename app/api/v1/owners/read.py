@@ -53,22 +53,22 @@ def get_user_gym_id(user: User, session: SessionDep) -> Optional[str]:
     """Get gym_id for the user (member gets their gym, owner gets their owned gym)"""
     if user.gym_id:
         return user.gym_id
-    
+
     # If user is owner/admin, get their owned gym
     gym = get_owner_gym(user, session)
     if gym:
         return gym.id
-    
+
     return None
 
 
 def get_active_og_plan_for_gym(gym_id: str, session: SessionDep) -> Optional[OGPlanInfoResponse]:
     """Get active OG Plan information for a gym"""
     from app.models.gym_subscription import GymSubscription, SubscriptionStatus
-    
+
     if not gym_id:
         return None
-    
+
     today = date.today()
     subscription_stmt = select(GymSubscription).where(
         and_(
@@ -78,18 +78,18 @@ def get_active_og_plan_for_gym(gym_id: str, session: SessionDep) -> Optional[OGP
         )
     ).order_by(GymSubscription.end_date.desc())
     active_subscription = session.exec(subscription_stmt).first()
-    
+
     if not active_subscription:
         return None
-    
+
     # Get OG Plan details
     from app.models.og_plan import OGPlan
     og_plan_stmt = select(OGPlan).where(OGPlan.id == active_subscription.og_plan_id)
     og_plan = session.exec(og_plan_stmt).first()
-    
+
     if not og_plan:
         return None
-    
+
     return OGPlanInfoResponse(
         og_plan_id=og_plan.id,
         og_plan_name=og_plan.name,
@@ -98,32 +98,23 @@ def get_active_og_plan_for_gym(gym_id: str, session: SessionDep) -> Optional[OGP
     )
 
 
-@router.get("/profile", response_model=APIResponse[UserResponse], status_code=status.HTTP_200_OK)
+@router.get("/profile", response_model=APIResponse[UserResponse])
 def get_profile(
     session: SessionDep = None,
     current_user: User = require_any_authenticated
 ):
-    """Get user profile - works for all roles (ADMIN, MEMBER, STAFF, TRAINER)"""
-    
-    # Get owner's gym (only for owners/admins)
-    gym = get_owner_gym(current_user, session)
-    
     user_service = UserService(session=session)
     user_data = user_service.get_user(current_user.id)
-    
-    # Update gym_id if gym exists (for owners/admins)
-    if gym:
-        user_data.gym_id = gym.id
-    
-    # Get OG Plan details only for ADMIN role (gym owners)
-    user_role_name = _get_user_role_name(current_user, session)
-    if user_role_name == RoleEnum.ADMIN.value:
-        gym_id = get_user_gym_id(current_user, session)
-        if gym_id:
-            og_plan_info = get_active_og_plan_for_gym(gym_id, session)
-            user_data.og_plan = og_plan_info
-    
-    return success_response(data=user_data, message="Profile fetched successfully")
+
+    # OG Plan only for ADMIN
+    if user_data.role_name == RoleEnum.ADMIN.value and user_data.gym_id:
+        og_plan_info = get_active_og_plan_for_gym(user_data.gym_id, session)
+        user_data.og_plan = og_plan_info
+
+    return success_response(
+        data=user_data,
+        message="Profile fetched successfully"
+    )
 
 
 @router.get("/members", response_model=APIResponse[MemberListResponse], status_code=status.HTTP_200_OK)
@@ -144,7 +135,7 @@ def get_all_members(
             message="No gym found for this owner",
             data=None
         )
-    
+
     user_service = UserService(session=session)
     members_data = user_service.get_all_members(
         gym_id=gym.id,
@@ -174,7 +165,7 @@ def get_pending_payments(
             data=None,
             status_code=status.HTTP_404_NOT_FOUND
         )
-    
+
     payment_service = PaymentService(session=session)
     pending_payments = payment_service.get_pending_payments(
         gym_id=gym.id,
@@ -182,22 +173,23 @@ def get_pending_payments(
         page=page,
         page_size=page_size
     )
-    
+
     return success_response(
         data=pending_payments,
         message="Payments fetched successfully"
     )
 
-
-@router.get("/revenue", response_model=APIResponse[GymRevenueResponse], status_code=status.HTTP_200_OK)
+@router.get(
+    "/revenue",
+    response_model=APIResponse[GymRevenueResponse],
+    status_code=status.HTTP_200_OK
+)
 def get_gym_revenue(
-    start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD) for date range filter"),
-    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD) for date range filter"),
-    filter_status: str = Query("all", description="Payment filter: received (verified), pending, or all"),
+    start_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
     session: SessionDep = None,
     current_user: User = require_admin
 ):
-    """Fetch gym revenue with optional date range and payment status filters (received/pending/all)."""
     gym = get_owner_gym(current_user, session)
     if not gym:
         return failure_response(
@@ -205,40 +197,21 @@ def get_gym_revenue(
             data=None,
             status_code=status.HTTP_404_NOT_FOUND
         )
-    start_d = None
-    end_d = None
-    if start_date:
-        try:
-            start_d = date.fromisoformat(start_date)
-        except ValueError:
-            return failure_response(
-                message="Invalid start_date; use YYYY-MM-DD",
-                data=None,
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
-    if end_date:
-        try:
-            end_d = date.fromisoformat(end_date)
-        except ValueError:
-            return failure_response(
-                message="Invalid end_date; use YYYY-MM-DD",
-                data=None,
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
-    if filter_status not in ("received", "pending", "all"):
-        return failure_response(
-            message="filter_status must be: received, pending, or all",
-            data=None,
-            status_code=status.HTTP_400_BAD_REQUEST
-        )
+
+    start_d = date.fromisoformat(start_date) if start_date else None
+    end_d = date.fromisoformat(end_date) if end_date else None
+
     payment_service = PaymentService(session=session)
     revenue = payment_service.get_gym_revenue(
         gym_id=gym.id,
         start_date=start_d,
-        end_date=end_d,
-        filter_status=filter_status,
+        end_date=end_d
     )
-    return success_response(data=revenue, message="Revenue fetched successfully")
+
+    return success_response(
+        data=revenue,
+        message="Revenue fetched successfully"
+    )
 
 
 @router.get("/dashboard", response_model=APIResponse[DashboardKPIsResponse], status_code=status.HTTP_200_OK)
@@ -262,7 +235,7 @@ def get_dashboard_kpis(
             data=None
         )
     role_enum = RoleEnum(role.name)
-    
+
     dashboard_service = DashboardService(session=session)
     kpis_data = dashboard_service.get_user_kpis(
         user_id=current_user.id,
@@ -302,7 +275,7 @@ def get_member_detail(
             message="No gym found for this owner",
             data=None
         )
-    
+
     user_service = UserService(session=session)
     try:
         member_detail = user_service.get_member_detail(member_id, gym.id)
@@ -341,13 +314,13 @@ def get_staff(
         )
     user_service = UserService(session=session)
     staff = user_service.get_user(staff_id)
-    
+
     if staff.gym_id != gym.id or staff.role != "STAFF":
         return failure_response(
             message="Staff not found in your gym",
             data=None
         )
-    
+
     return success_response(data=staff, message="Staff data fetched successfully")
 
 
@@ -366,13 +339,13 @@ def get_trainer(
         )
     user_service = UserService(session=session)
     trainer = user_service.get_user(trainer_id)
-    
+
     if trainer.gym_id != gym.id or trainer.role != "TRAINER":
         return failure_response(
             message="Trainer not found in your gym",
             data=None
         )
-    
+
     return success_response(data=trainer, message="Trainer data fetched successfully")
 
 
@@ -391,13 +364,13 @@ def get_plan(
         )
     plan_service = PlanService(session=session)
     plan = plan_service.get_plan(plan_id)
-    
+
     if plan.gym_id != gym.id:
         return failure_response(
             message="Plan not found in your gym",
             data=None
         )
-    
+
     return success_response(data=plan, message="Plan fetched successfully")
 
 
@@ -413,7 +386,7 @@ def get_all_plans(
             message="No gym found for this owner",
             data=None
         )
-    
+
     plan_service = PlanService(session=session)
     plans_data = plan_service.get_all_plans(gym_id=gym.id)
     return success_response(data=plans_data, message="Plans fetched successfully")
@@ -431,7 +404,7 @@ def get_all_gym_rules(
             message="No gym found for this owner",
             data=None
         )
-    
+
     gym_service = GymService(session=session)
     rules_data = gym_service.get_all_gym_rules(gym_id=gym.id)
     return success_response(data=rules_data, message="Gym rules fetched successfully")
@@ -457,7 +430,7 @@ def get_daily_attendance(
 ):
     """
     Get daily attendance for the owner's gym with date query, filtering, and search.
-    
+
     Query Parameters:
     - target_date: Date in YYYY-MM-DD format (defaults to today)
     - filter_status: 'present' or 'absent' to filter members (optional)
@@ -470,7 +443,7 @@ def get_daily_attendance(
             data=None,
             status_code=status.HTTP_404_NOT_FOUND
         )
-    
+
     # Parse target_date or use today
     if target_date:
         try:
@@ -483,7 +456,7 @@ def get_daily_attendance(
             )
     else:
         query_date = date.today()
-    
+
     attendance_service = AttendanceService(session=session)
     try:
         attendance_data = attendance_service.get_daily_attendance(
@@ -517,16 +490,16 @@ def get_gym_rule(
             message="No gym found for this owner",
             data=None
         )
-    
+
     gym_service = GymService(session=session)
     rule = gym_service.get_gym_rule(rule_id)
-    
+
     if rule.gym_id != gym.id:
         return failure_response(
             message="Rule not found in your gym",
             data=None
         )
-    
+
     return success_response(data=rule, message="Gym rule fetched successfully")
 
 
@@ -545,13 +518,13 @@ def get_membership(
         )
     membership_service = MembershipService(session=session)
     membership = membership_service.get_membership(membership_id)
-    
+
     if membership.gym_id != gym.id:
         return failure_response(
             message="Membership not found in your gym",
             data=None
         )
-    
+
     return success_response(data=membership, message="Membership fetched successfully")
 
 
