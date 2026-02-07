@@ -72,3 +72,12 @@ class PendingPaymentListResponse(BaseModel):
     page_size: int = Field(description="Number of items per page")
     has_next: bool = Field(description="Whether there are more pages")
 
+
+class GymRevenueResponse(BaseModel):
+    """Gym revenue summary with optional filters (date range, received/pending)."""
+    total_amount: Decimal = Field(description="Total payment amount in the filtered set")
+    count: int = Field(description="Number of payments in the filtered set")
+    filter_status: str = Field(description="Filter applied: received, pending, or all")
+    start_date: Optional[str] = Field(default=None, description="Start date of range (YYYY-MM-DD)")
+    end_date: Optional[str] = Field(default=None, description="End date of range (YYYY-MM-DD)")
+

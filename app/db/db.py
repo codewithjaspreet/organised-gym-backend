@@ -46,7 +46,6 @@ def _build_database_url() -> str:
             f"{settings.db_host}:"
             f"{settings.db_port}/"
             f"{settings.db_name}"
-            f"?sslmode=require"
         )
 
     print("🔑 Using IAM authentication", file=sys.stderr)

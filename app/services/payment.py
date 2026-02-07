@@ -1,7 +1,8 @@
 from sqlmodel import select, and_, func
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from decimal import Decimal
 from zoneinfo import ZoneInfo
-from typing import List
+from typing import List, Optional
 from app.core.exceptions import NotFoundError
 from app.db.db import SessionDep
 from app.models.payments import Payment
@@ -9,8 +10,9 @@ from app.models.membership import Membership
 from app.models.plan import Plan
 from app.models.gym import Gym
 from app.schemas.payments import (
-    PaymentCreate, PaymentResponse, PaymentUpdate, MemberPaymentCreate, 
-    PaymentStatusUpdate, PaymentStatusType, PendingPaymentResponse, PendingPaymentListResponse
+    PaymentCreate, PaymentResponse, PaymentUpdate, MemberPaymentCreate,
+    PaymentStatusUpdate, PaymentStatusType, PendingPaymentResponse, PendingPaymentListResponse,
+    GymRevenueResponse,
 )
 from app.schemas.user import CurrentPlanResponse
 
@@ -387,5 +389,46 @@ class PaymentService:
             page=page,
             page_size=page_size,
             has_next=has_next
+        )
+
+    def get_gym_revenue(
+        self,
+        gym_id: str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        filter_status: str = "all",
+    ) -> GymRevenueResponse:
+        """
+        Fetch gym revenue efficiently. Filter by date range and/or payment status.
+        filter_status: "received" (verified), "pending", or "all".
+        """
+        conditions = [Payment.gym_id == gym_id]
+
+        if start_date is not None:
+            conditions.append(Payment.created_at >= datetime.combine(start_date, datetime.min.time()))
+        if end_date is not None:
+            # Include full end_date day (before start of next day)
+            conditions.append(Payment.created_at < datetime.combine(end_date + timedelta(days=1), datetime.min.time()))
+
+        if filter_status == "received":
+            conditions.append(Payment.status == "verified")
+        elif filter_status == "pending":
+            conditions.append(Payment.status == "pending")
+
+        sum_stmt = select(func.coalesce(func.sum(Payment.amount), 0)).where(and_(*conditions))
+        count_stmt = select(func.count(Payment.id)).where(and_(*conditions))
+        total_amount = self.session.exec(sum_stmt).first()
+        count = self.session.exec(count_stmt).first() or 0
+        if total_amount is None:
+            total_amount = Decimal("0")
+        if not isinstance(total_amount, Decimal):
+            total_amount = Decimal(str(total_amount))
+
+        return GymRevenueResponse(
+            total_amount=total_amount,
+            count=count,
+            filter_status=filter_status,
+            start_date=start_date.isoformat() if start_date else None,
+            end_date=end_date.isoformat() if end_date else None,
         )
 

@@ -209,22 +209,44 @@ async def update_bank_account(
     elif qr_code_url:
         # Use direct URL if provided
         final_qr_code_url = qr_code_url
-    
-    # Build update data
+
+    # Validation: required string fields must not be empty when provided
+    required_fields = [
+        ("account_holder_name", account_holder_name),
+        ("bank_name", bank_name),
+        ("account_number", account_number),
+        ("ifsc_code", ifsc_code),
+    ]
+    for field_name, value in required_fields:
+        if value is not None and (not isinstance(value, str) or not value.strip()):
+            return failure_response(
+                message=f"{field_name} cannot be empty",
+                data=None,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+    # Build update data: only include non-None values; treat empty string for upi_id as None
     update_data = {}
     if account_holder_name is not None:
-        update_data["account_holder_name"] = account_holder_name
+        update_data["account_holder_name"] = account_holder_name.strip()
     if bank_name is not None:
-        update_data["bank_name"] = bank_name
+        update_data["bank_name"] = bank_name.strip()
     if account_number is not None:
-        update_data["account_number"] = account_number
+        update_data["account_number"] = account_number.strip()
     if ifsc_code is not None:
-        update_data["ifsc_code"] = ifsc_code
+        update_data["ifsc_code"] = ifsc_code.strip()
     if upi_id is not None:
-        update_data["upi_id"] = upi_id
+        update_data["upi_id"] = upi_id.strip() or None
     if final_qr_code_url is not None:
         update_data["qr_code_url"] = final_qr_code_url
-    
+
+    if not update_data:
+        return failure_response(
+            message="No valid fields to update. Provide at least one of: account_holder_name, bank_name, account_number, ifsc_code, upi_id, qr_code_file, qr_code_url",
+            data=None,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
     # Create update object
     bank_account_update = BankAccountUpdate(**update_data)
     

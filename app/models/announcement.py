@@ -15,6 +15,11 @@ class SendToType(str, Enum):
     PENDING_FEES = "Pending Fees"
     PLAN_EXPIRING_TODAY = "Plan Expiring Today"
     PLAN_EXPIRING_IN_3_DAYS = "Plan Expiring in 3 days"
+    ALL_USERS = "All Users"
+    OWNERS = "Owners"
+    MEMBERS = "Members"
+    SPECIFIC_GYM = "Specific Gym"
+    SPECIFIC_MEMBER = "Specific Member"
 
 class Announcement(SQLModel, table=True):
     __tablename__ = "announcements"
@@ -26,7 +31,7 @@ class Announcement(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: Optional[datetime] = Field(default=None)
     user_id: str = Field(foreign_key="users.id")
-    gym_id:str = Field(foreign_key="gyms.id")
+    gym_id: Optional[str] = Field(default=None, foreign_key="gyms.id", nullable=True)
     user: Optional["User"] = Relationship(back_populates="announcements")
     gym: Optional["Gym"] = Relationship(back_populates="announcements")
     send_to: SendToType = Field(default=SendToType.ALL)

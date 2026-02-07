@@ -273,28 +273,17 @@ def get_announcements(
     session: SessionDep = None,
     current_user: User = require_any_authenticated
 ):
-    """Get all announcements for the member's gym"""
-    # Get role name from database
+    """Get announcements relevant to the logged-in user (user-specific; only announcements intended for this member)."""
     stmt = select(RoleModel).where(RoleModel.id == current_user.role_id)
     role = session.exec(stmt).first()
-    
     if not role or role.name != "MEMBER":
         return failure_response(
             message="Only members can access this endpoint",
             data=None,
             status_code=status.HTTP_403_FORBIDDEN
         )
-    
-    # Check if member has a gym assigned
-    if not current_user.gym_id:
-        return failure_response(
-            message="No gym assigned to this member",
-            data=None,
-            status_code=status.HTTP_404_NOT_FOUND
-        )
-    
     announcement_service = AnnouncementService(session=session)
-    announcements = announcement_service.get_announcements_by_gym(gym_id=current_user.gym_id)
+    announcements = announcement_service.get_announcements_for_user(current_user=current_user)
     announcements_data = AnnouncementListResponse(announcements=announcements)
     return success_response(data=announcements_data, message="Announcements fetched successfully")
 

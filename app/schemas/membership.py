@@ -20,6 +20,8 @@ class MembershipUpdate(BaseModel):
     end_date: Optional[date] = Field(description="The membership end date", nullable=True)
     status: Optional[str] = Field(description="The membership status", nullable=True)
     plan_id: Optional[str] = Field(description="The plan id", nullable=True)
+    new_duration: Optional[int] = Field(default=None, description="New duration in days (replaces plan duration)", nullable=True)
+    new_price: Optional[Decimal] = Field(default=None, description="New price (replaces plan price)", nullable=True)
 
 
 class MembershipResponse(BaseModel):

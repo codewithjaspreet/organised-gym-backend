@@ -13,7 +13,7 @@ from app.schemas.gym_rule import GymRuleResponse, GymRuleListResponse
 from app.schemas.membership import MembershipResponse
 from app.schemas.announcement import AnnouncementResponse, AnnouncementListResponse
 from app.schemas.dashboard import DashboardKPIsResponse
-from app.schemas.payments import PendingPaymentListResponse
+from app.schemas.payments import PendingPaymentListResponse, GymRevenueResponse
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
 from app.services.user_service import UserService
@@ -187,6 +187,58 @@ def get_pending_payments(
         data=pending_payments,
         message="Payments fetched successfully"
     )
+
+
+@router.get("/revenue", response_model=APIResponse[GymRevenueResponse], status_code=status.HTTP_200_OK)
+def get_gym_revenue(
+    start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD) for date range filter"),
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD) for date range filter"),
+    filter_status: str = Query("all", description="Payment filter: received (verified), pending, or all"),
+    session: SessionDep = None,
+    current_user: User = require_admin
+):
+    """Fetch gym revenue with optional date range and payment status filters (received/pending/all)."""
+    gym = get_owner_gym(current_user, session)
+    if not gym:
+        return failure_response(
+            message="No gym found for this owner",
+            data=None,
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    start_d = None
+    end_d = None
+    if start_date:
+        try:
+            start_d = date.fromisoformat(start_date)
+        except ValueError:
+            return failure_response(
+                message="Invalid start_date; use YYYY-MM-DD",
+                data=None,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+    if end_date:
+        try:
+            end_d = date.fromisoformat(end_date)
+        except ValueError:
+            return failure_response(
+                message="Invalid end_date; use YYYY-MM-DD",
+                data=None,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+    if filter_status not in ("received", "pending", "all"):
+        return failure_response(
+            message="filter_status must be: received, pending, or all",
+            data=None,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+    payment_service = PaymentService(session=session)
+    revenue = payment_service.get_gym_revenue(
+        gym_id=gym.id,
+        start_date=start_d,
+        end_date=end_d,
+        filter_status=filter_status,
+    )
+    return success_response(data=revenue, message="Revenue fetched successfully")
 
 
 @router.get("/dashboard", response_model=APIResponse[DashboardKPIsResponse], status_code=status.HTTP_200_OK)
@@ -508,14 +560,8 @@ def get_announcements(
     session: SessionDep = None,
     current_user: User = require_admin
 ):
-    """Get all announcements for the owner's gym"""
-    gym = get_owner_gym(current_user, session)
-    if not gym:
-        return failure_response(
-            message="No gym found for this owner",
-            data=None
-        )
+    """Get announcements relevant to the logged-in user (user-specific filtering)."""
     announcement_service = AnnouncementService(session=session)
-    announcements = announcement_service.get_announcements_by_gym(gym_id=gym.id)
+    announcements = announcement_service.get_announcements_for_user(current_user=current_user)
     announcements_data = AnnouncementListResponse(announcements=announcements)
     return success_response(data=announcements_data, message="Announcements fetched successfully")

@@ -13,11 +13,13 @@ from app.models.gym_subscription import GymSubscription, SubscriptionStatus
 from app.schemas.user import UserCreate, UserResponse
 from app.schemas.gym import GymCreate, GymResponse
 from app.schemas.og_plan import OGPlanCreate, OGPlanResponse
+from app.schemas.announcement import PlatformAnnouncementCreate, AnnouncementResponse
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
 from app.services.user_service import UserService
 from app.services.gym_service import GymService
 from app.services.og_plan_service import OGPlanService
+from app.services.announcement_service import AnnouncementService
 
 router = APIRouter(prefix="/create", tags=["platform-admin"])
 
@@ -152,4 +154,19 @@ def create_og_plan(
     og_plan_service = OGPlanService(session=session)
     og_plan_data = og_plan_service.create_og_plan(og_plan)
     return success_response(data=og_plan_data, message="OG plan created successfully")
+
+
+@router.post("/announcements", response_model=APIResponse[AnnouncementResponse], status_code=status.HTTP_201_CREATED)
+def create_platform_announcement(
+    payload: PlatformAnnouncementCreate,
+    session: SessionDep = None,
+    current_user: User = require_og
+):
+    """Send an announcement as platform admin. Audience: All users, Owners, Members, specific Gym, or specific Member."""
+    announcement_service = AnnouncementService(session=session)
+    announcement_data = announcement_service.create_platform_announcement(
+        payload=payload,
+        user_id=current_user.id,
+    )
+    return success_response(data=announcement_data, message="Announcement sent successfully")
 

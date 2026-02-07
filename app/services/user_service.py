@@ -618,6 +618,10 @@ class UserService:
         if not user:
             raise UserNotFoundError(detail=f"User with username '{member_user_name}' not found")
 
+        # Member must be active
+        if not user.is_active:
+            raise NotFoundError(detail=f"User '{member_user_name}' is inactive and cannot be added to a gym")
+
         # Verify user is a MEMBER
         member_role_stmt = select(RoleModel).where(RoleModel.name == "MEMBER")
         member_role = self.session.exec(member_role_stmt).first()
@@ -640,7 +644,7 @@ class UserService:
 
         # Create membership if plan_id is provided
         if plan_id:
-            # Verify plan exists and belongs to the gym
+            # Verify plan exists, belongs to the gym, and is active
             plan_stmt = select(Plan).where(
                 and_(
                     Plan.id == plan_id,
@@ -651,6 +655,8 @@ class UserService:
 
             if not plan:
                 raise NotFoundError(detail=f"Plan with id '{plan_id}' not found for this gym")
+            if not plan.is_active:
+                raise NotFoundError(detail=f"Plan with id '{plan_id}' is inactive. Only active plans can be assigned.")
 
             # Calculate start and end dates
             # Use new_duration if provided, otherwise use plan duration
@@ -673,6 +679,31 @@ class UserService:
             self.session.commit()
 
         return UserResponse(**user.model_dump(exclude={"password_hash"}))
+
+    def leave_gym(self, user_id: str) -> None:
+        """Member leaves their gym: clear gym_id and plan_id, deactivate all active memberships for that gym."""
+        stmt = select(User).where(User.id == user_id)
+        user = self.session.exec(stmt).first()
+        if not user:
+            raise UserNotFoundError(detail="User not found")
+        if not user.gym_id:
+            raise NotFoundError(detail="User is not assigned to any gym")
+        gym_id = user.gym_id
+        user.gym_id = None
+        user.plan_id = None
+        self.session.add(user)
+        # Deactivate all active memberships for this user in this gym
+        membership_stmt = select(Membership).where(
+            and_(
+                Membership.user_id == user_id,
+                Membership.gym_id == gym_id,
+                Membership.status == "active",
+            )
+        )
+        for m in self.session.exec(membership_stmt).all():
+            m.status = "inactive"
+            self.session.add(m)
+        self.session.commit()
 
     def get_reset_link_data(
         self,

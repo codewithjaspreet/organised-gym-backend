@@ -504,3 +504,91 @@ def send_fcm_notification_to_gym_members_by_filter(
             })
 
     return results
+
+
+def send_fcm_notification_to_platform_audience(
+    send_to: str,
+    title: str,
+    body: str,
+    data: Optional[dict] = None,
+    session=None,
+    gym_id: Optional[str] = None,
+    member_ids: Optional[list[str]] = None,
+) -> list[dict]:
+    """
+    Send FCM notification to platform-level audience: All Users, Owners, Members,
+    Specific Gym (all members of that gym), or Specific Member(s).
+    """
+    if not session:
+        raise ValueError("Database session is required")
+
+    from app.schemas.announcement import SendToType
+
+    base_conditions = [
+        User.device_token.isnot(None),
+        User.device_token != "",
+        User.is_active == True,
+    ]
+    members: list[User] = []
+
+    if send_to == SendToType.ALL_USERS.value:
+        stmt = select(User).where(and_(*base_conditions))
+        members = list(session.exec(stmt).all())
+
+    elif send_to == SendToType.OWNERS.value:
+        admin_role = session.exec(select(Role).where(Role.name == "ADMIN")).first()
+        if admin_role:
+            stmt = select(User).where(
+                and_(*base_conditions, User.role_id == admin_role.id)
+            )
+            members = list(session.exec(stmt).all())
+
+    elif send_to == SendToType.MEMBERS.value:
+        member_role = session.exec(select(Role).where(Role.name == "MEMBER")).first()
+        if member_role:
+            stmt = select(User).where(
+                and_(*base_conditions, User.role_id == member_role.id)
+            )
+            members = list(session.exec(stmt).all())
+
+    elif send_to == SendToType.SPECIFIC_GYM.value and gym_id:
+        member_role = session.exec(select(Role).where(Role.name == "MEMBER")).first()
+        if member_role:
+            stmt = select(User).where(
+                and_(
+                    *base_conditions,
+                    User.gym_id == gym_id,
+                    User.role_id == member_role.id,
+                )
+            )
+            members = list(session.exec(stmt).all())
+
+    elif send_to == SendToType.SPECIFIC_MEMBER.value and member_ids:
+        stmt = select(User).where(
+            and_(*base_conditions, User.id.in_(member_ids))
+        )
+        members = list(session.exec(stmt).all())
+
+    if not members:
+        return []
+
+    results_platform: list[dict] = []
+    for member in members:
+        if not member.device_token or member.device_token.strip() == "":
+            results_platform.append({
+                "user_id": member.id,
+                "success": False,
+                "error": "Empty or invalid device token",
+            })
+            continue
+        try:
+            response = send_fcm_notification(
+                member.device_token, title, body, data
+            )
+            results_platform.append({"user_id": member.id, "success": True, "response": response})
+        except Exception as e:
+            logger.warning(
+                f"[NOTIFICATION DEBUG] Failed to send to user {member.id}: {str(e)}"
+            )
+            results_platform.append({"user_id": member.id, "success": False, "error": str(e)})
+    return results_platform

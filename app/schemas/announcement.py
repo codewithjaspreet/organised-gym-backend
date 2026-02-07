@@ -12,6 +12,12 @@ class SendToType(str, Enum):
     PLAN_EXPIRING_TODAY = "Plan Expiring Today"
     PLAN_EXPIRING_IN_3_DAYS = "Plan Expiring in 3 days"
     SPECIFIC_MEMBERS = "Specific Members"
+    # Platform admin send-to types
+    ALL_USERS = "All Users"
+    OWNERS = "Owners"
+    MEMBERS = "Members"
+    SPECIFIC_GYM = "Specific Gym"
+    SPECIFIC_MEMBER = "Specific Member"
 
 
 class AnnouncementData(BaseModel):
@@ -23,10 +29,25 @@ class AnnouncementCreate(BaseModel):
     message: str = Field(description="The announcement message", min_length=1)
     is_active: bool = Field(description="Whether the announcement is active", default=True)
     user_id: str = Field(description="The user id")
-    gym_id: str = Field(description="The gym id")
+    gym_id: Optional[str] = Field(default=None, description="The gym id (required for gym-scoped announcements)")
     send_to: SendToType = Field(description="Who to send the announcement to", default=SendToType.ALL)
-    member_ids: Optional[List[str]] = Field(default=None, description="List of member user IDs (required when send_to is 'Specific Members')")
+    member_ids: Optional[List[str]] = Field(default=None, description="List of member user IDs (required when send_to is 'Specific Members' or 'Specific Member')")
     data: Optional[AnnouncementData] = Field(default=None, description="Data object containing route for deep linking")
+
+
+class PlatformAnnouncementCreate(BaseModel):
+    """Schema for platform admin sending announcements to All users, Owners, Members, specific Gym, or specific Member."""
+    title: str = Field(description="The announcement title", min_length=1)
+    message: str = Field(description="The announcement message", min_length=1)
+    send_to: SendToType = Field(
+        description="Audience: All Users, Owners, Members, Specific Gym, or Specific Member"
+    )
+    gym_id: Optional[str] = Field(default=None, description="Required when send_to is 'Specific Gym'")
+    member_ids: Optional[List[str]] = Field(
+        default=None,
+        description="Required when send_to is 'Specific Member' (list of one or more user IDs)",
+    )
+    data: Optional[AnnouncementData] = Field(default=None, description="Deep link data")
 
 
 class AnnouncementResponse(BaseModel):
@@ -35,7 +56,9 @@ class AnnouncementResponse(BaseModel):
     message: str = Field(description="The announcement message")
     is_active: bool = Field(description="Whether the announcement is active")
     user_id: str = Field(description="The user id")
-    gym_id: str = Field(description="The gym id")
+    gym_id: Optional[str] = Field(default=None, description="The gym id (null for platform-wide)")
+    send_to: Optional[str] = Field(default=None, description="Audience (All, Specific Members, etc.)")
+    member_ids: Optional[List[str]] = Field(default=None, description="Target member IDs when send_to is specific")
     created_at: datetime = Field(description="The announcement creation date")
     updated_at: Optional[datetime] = Field(description="The announcement update date", default=None)
 
