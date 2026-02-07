@@ -29,183 +29,183 @@ class UserService:
     def __init__(self, session: SessionDep):
         self.session = session
 
-    # def get_user(self, user_id: str) -> UserResponse:
-    #     from app.models.role import Role as RoleModel
-    #     from app.models.gym import Gym
-    #     from datetime import date
-
-    #     stmt = select(User).where(User.id == user_id)
-    #     user = self.session.exec(stmt).first()
-    #     if not user:
-    #         raise UserNotFoundError(detail=f"User with id {user_id} not found")
-
-    #     # Get role name
-    #     role_name = None
-    #     if user.role_id:
-    #         role_stmt = select(RoleModel).where(RoleModel.id == user.role_id)
-    #         role = self.session.exec(role_stmt).first()
-    #         role_name = role.name if role else None
-
-    #     # Get gym name
-    #     gym_name = None
-    #     if user.gym_id:
-    #         gym_stmt = select(Gym).where(Gym.id == user.gym_id)
-    #         gym = self.session.exec(gym_stmt).first()
-    #         gym_name = gym.name if gym else None
-
-    #     # For members, get plan_id and plan_amount from active membership instead of user.plan_id
-    #     plan_id = user.plan_id
-    #     plan_amount = None
-    #     current_plan = None
-    #     if role_name == "MEMBER" and user.gym_id:
-    #         today = date.today()
-    #         # Get active membership (status = 'active' and end_date >= today)
-    #         membership_stmt = select(Membership).where(
-    #             and_(
-    #                 Membership.user_id == user_id,
-    #                 Membership.gym_id == user.gym_id,
-    #                 Membership.status == "active",
-    #                 Membership.end_date >= today
-    #             )
-    #         ).order_by(desc(Membership.end_date))
-    #         active_membership = self.session.exec(membership_stmt).first()
-
-    #         if active_membership and active_membership.plan_id:
-    #             plan_id = active_membership.plan_id
-
-    #             # Get plan details to get the amount
-    #             plan_stmt = select(Plan).where(Plan.id == active_membership.plan_id)
-    #             plan = self.session.exec(plan_stmt).first()
-
-    #             if plan:
-    #                 # Use new_price if available, otherwise use plan.price (same logic as get_all_members)
-    #                 plan_amount = active_membership.new_price if active_membership.new_price else plan.price
-
-    #                 # Build current_plan object (same as member-detail)
-    #                 total_price = float(active_membership.new_price) if active_membership.new_price else float(plan.price)
-    #                 days_left = (active_membership.end_date - today).days
-    #                 if days_left <= 7:
-    #                     status = "expiring_soon"
-    #                 else:
-    #                     status = "active"
-
-    #                 current_plan = CurrentPlanResponse(
-    #                     plan_id=plan.id,
-    #                     plan_name=plan.name,
-    #                     expiry_date=active_membership.end_date.isoformat(),
-    #                     monthly_price=round(total_price, 2),
-    #                     status=status,
-    #                     days_left=days_left
-    #                 )
-    #         else:
-    #             # Check if user has any expired membership (fallback similar to get_all_members)
-    #             expired_stmt = select(Membership).where(
-    #                 and_(
-    #                     Membership.user_id == user_id,
-    #                     Membership.gym_id == user.gym_id,
-    #                     Membership.end_date < today
-    #                 )
-    #             ).order_by(desc(Membership.end_date))
-    #             expired_membership = self.session.exec(expired_stmt).first()
-
-    #             if expired_membership and expired_membership.plan_id:
-    #                 plan_id = expired_membership.plan_id
-
-    #                 # Get plan details to get the amount
-    #                 plan_stmt = select(Plan).where(Plan.id == expired_membership.plan_id)
-    #                 plan = self.session.exec(plan_stmt).first()
-
-    #                 if plan:
-    #                     # Use new_price if available, otherwise use plan.price
-    #                     plan_amount = expired_membership.new_price if expired_membership.new_price else plan.price
-
-    #     user_dict = user.model_dump(exclude={"password_hash"})
-    #     user_dict["role_name"] = role_name
-    #     user_dict["gym_name"] = gym_name
-    #     user_dict["plan_id"] = plan_id
-    #     user_dict["plan_amount"] = plan_amount
-    #     user_dict["current_plan"] = current_plan
-    #     return UserResponse(**user_dict)
-
-
     def get_user(self, user_id: str) -> UserResponse:
-        from datetime import date
-        from app.models.role import Role
+        from app.models.role import Role as RoleModel
         from app.models.gym import Gym
+        from datetime import date
 
-        today = date.today()
-
-        # ---- BASE USER QUERY ----
-        stmt = (
-            select(User, Role.name, Gym.name)
-            .outerjoin(Role, Role.id == User.role_id)
-            .outerjoin(Gym, Gym.id == User.gym_id)
-            .where(User.id == user_id)
-        )
-
-        result = self.session.exec(stmt).first()
-        if not result:
+        stmt = select(User).where(User.id == user_id)
+        user = self.session.exec(stmt).first()
+        if not user:
             raise UserNotFoundError(detail=f"User with id {user_id} not found")
 
-        user, role_name, gym_name = result
-        gym_id = user.gym_id
+        # Get role name
+        role_name = None
+        if user.role_id:
+            role_stmt = select(RoleModel).where(RoleModel.id == user.role_id)
+            role = self.session.exec(role_stmt).first()
+            role_name = role.name if role else None
 
-        # ---- ADMIN / OWNER GYM FALLBACK ----
-        if role_name == "ADMIN" and not gym_name:
-            owner_gym = get_owner_gym(user, self.session)
-            if owner_gym:
-                gym_id = owner_gym.id
-                gym_name = owner_gym.name
+        # Get gym name
+        gym_name = None
+        if user.gym_id:
+            gym_stmt = select(Gym).where(Gym.id == user.gym_id)
+            gym = self.session.exec(gym_stmt).first()
+            gym_name = gym.name if gym else None
 
-        # ---- MEMBERSHIP LOGIC (MEMBERS ONLY) ----
+        # For members, get plan_id and plan_amount from active membership instead of user.plan_id
         plan_id = user.plan_id
         plan_amount = None
         current_plan = None
-
-        if role_name == "MEMBER" and gym_id:
-            membership_stmt = (
-                select(Membership, Plan)
-                .join(Plan, Plan.id == Membership.plan_id)
-                .where(
-                    Membership.user_id == user.id,
-                    Membership.gym_id == gym_id
+        if role_name == "MEMBER" and user.gym_id:
+            today = date.today()
+            # Get active membership (status = 'active' and end_date >= today)
+            membership_stmt = select(Membership).where(
+                and_(
+                    Membership.user_id == user_id,
+                    Membership.gym_id == user.gym_id,
+                    Membership.status == "active",
+                    Membership.end_date >= today
                 )
-                .order_by(
-                    desc(Membership.status == "active"),
-                    desc(Membership.end_date)
-                )
-            )
+            ).order_by(desc(Membership.end_date))
+            active_membership = self.session.exec(membership_stmt).first()
 
-            result = self.session.exec(membership_stmt).first()
+            if active_membership and active_membership.plan_id:
+                plan_id = active_membership.plan_id
 
-            if result:
-                membership, plan = result
-                plan_id = plan.id
-                plan_amount = membership.new_price or plan.price
+                # Get plan details to get the amount
+                plan_stmt = select(Plan).where(Plan.id == active_membership.plan_id)
+                plan = self.session.exec(plan_stmt).first()
 
-                if membership.status == "active" and membership.end_date >= today:
-                    days_left = (membership.end_date - today).days
+                if plan:
+                    # Use new_price if available, otherwise use plan.price (same logic as get_all_members)
+                    plan_amount = active_membership.new_price if active_membership.new_price else plan.price
+
+                    # Build current_plan object (same as member-detail)
+                    total_price = float(active_membership.new_price) if active_membership.new_price else float(plan.price)
+                    days_left = (active_membership.end_date - today).days
+                    if days_left <= 7:
+                        status = "expiring_soon"
+                    else:
+                        status = "active"
+
                     current_plan = CurrentPlanResponse(
                         plan_id=plan.id,
                         plan_name=plan.name,
-                        expiry_date=membership.end_date.isoformat(),
-                        monthly_price=float(plan_amount),
-                        status="expiring_soon" if days_left <= 7 else "active",
+                        expiry_date=active_membership.end_date.isoformat(),
+                        monthly_price=round(total_price, 2),
+                        status=status,
                         days_left=days_left
                     )
+            else:
+                # Check if user has any expired membership (fallback similar to get_all_members)
+                expired_stmt = select(Membership).where(
+                    and_(
+                        Membership.user_id == user_id,
+                        Membership.gym_id == user.gym_id,
+                        Membership.end_date < today
+                    )
+                ).order_by(desc(Membership.end_date))
+                expired_membership = self.session.exec(expired_stmt).first()
 
-        # ---- RESPONSE ----
+                if expired_membership and expired_membership.plan_id:
+                    plan_id = expired_membership.plan_id
+
+                    # Get plan details to get the amount
+                    plan_stmt = select(Plan).where(Plan.id == expired_membership.plan_id)
+                    plan = self.session.exec(plan_stmt).first()
+
+                    if plan:
+                        # Use new_price if available, otherwise use plan.price
+                        plan_amount = expired_membership.new_price if expired_membership.new_price else plan.price
+
         user_dict = user.model_dump(exclude={"password_hash"})
-        user_dict.update({
-            "gym_id": gym_id,
-            "gym_name": gym_name,
-            "role_name": role_name,
-            "plan_id": plan_id,
-            "plan_amount": plan_amount,
-            "current_plan": current_plan
-        })
-
+        user_dict["role_name"] = role_name
+        user_dict["gym_name"] = gym_name
+        user_dict["plan_id"] = plan_id
+        user_dict["plan_amount"] = plan_amount
+        user_dict["current_plan"] = current_plan
         return UserResponse(**user_dict)
+
+
+    # def get_user(self, user_id: str) -> UserResponse:
+    #     from datetime import date
+    #     from app.models.role import Role
+    #     from app.models.gym import Gym
+
+    #     today = date.today()
+
+    #     # ---- BASE USER QUERY ----
+    #     stmt = (
+    #         select(User, Role.name, Gym.name)
+    #         .outerjoin(Role, Role.id == User.role_id)
+    #         .outerjoin(Gym, Gym.id == User.gym_id)
+    #         .where(User.id == user_id)
+    #     )
+
+    #     result = self.session.exec(stmt).first()
+    #     if not result:
+    #         raise UserNotFoundError(detail=f"User with id {user_id} not found")
+
+    #     user, role_name, gym_name = result
+    #     gym_id = user.gym_id
+
+    #     # ---- ADMIN / OWNER GYM FALLBACK ----
+    #     if role_name == "ADMIN" and not gym_name:
+    #         owner_gym = get_owner_gym(user, self.session)
+    #         if owner_gym:
+    #             gym_id = owner_gym.id
+    #             gym_name = owner_gym.name
+
+    #     # ---- MEMBERSHIP LOGIC (MEMBERS ONLY) ----
+    #     plan_id = user.plan_id
+    #     plan_amount = None
+    #     current_plan = None
+
+    #     if role_name == "MEMBER" and gym_id:
+    #         membership_stmt = (
+    #             select(Membership, Plan)
+    #             .join(Plan, Plan.id == Membership.plan_id)
+    #             .where(
+    #                 Membership.user_id == user.id,
+    #                 Membership.gym_id == gym_id
+    #             )
+    #             .order_by(
+    #                 desc(Membership.status == "active"),
+    #                 desc(Membership.end_date)
+    #             )
+    #         )
+
+    #         result = self.session.exec(membership_stmt).first()
+
+    #         if result:
+    #             membership, plan = result
+    #             plan_id = plan.id
+    #             plan_amount = membership.new_price or plan.price
+
+    #             if membership.status == "active" and membership.end_date >= today:
+    #                 days_left = (membership.end_date - today).days
+    #                 current_plan = CurrentPlanResponse(
+    #                     plan_id=plan.id,
+    #                     plan_name=plan.name,
+    #                     expiry_date=membership.end_date.isoformat(),
+    #                     monthly_price=float(plan_amount),
+    #                     status="expiring_soon" if days_left <= 7 else "active",
+    #                     days_left=days_left
+    #                 )
+
+    #     # ---- RESPONSE ----
+    #     user_dict = user.model_dump(exclude={"password_hash"})
+    #     user_dict.update({
+    #         "gym_id": gym_id,
+    #         "gym_name": gym_name,
+    #         "role_name": role_name,
+    #         "plan_id": plan_id,
+    #         "plan_amount": plan_amount,
+    #         "current_plan": current_plan
+    #     })
+
+    #     return UserResponse(**user_dict)
 
 
 
