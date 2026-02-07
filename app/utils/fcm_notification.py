@@ -163,6 +163,7 @@ def send_fcm_notification(
         raise
 
     payload = {
+        
         "message": {
             "token": device_token,
             "notification": {
@@ -170,18 +171,21 @@ def send_fcm_notification(
                 "body": body
             },
             "android": {
-                "priority": "high"
+                "priority": "high",
+                "notification": {
+                    "channel_id": "high_importance_channel_v3",
+                    "sound": "notification_sound"
+                }
             },
             "apns": {
                 "payload": {
                     "aps": {
-                        "sound": "default",
+                        "sound": "notification_sound.wav",
                         "content-available": 1
                     }
                 }
             }
-        },
-
+        }
     }
 
     # Add data payload if provided
