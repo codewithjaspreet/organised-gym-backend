@@ -90,7 +90,7 @@ class PaymentService:
         user = self.session.exec(user_stmt).first()
         if not user:
             raise NotFoundError(detail=f"User with id {user_id} not found")
-        
+
         if not user.gym_id:
             raise NotFoundError(detail="User has no gym assigned")
 
@@ -129,22 +129,22 @@ class PaymentService:
         try:
             from app.utils.fcm_notification import send_fcm_notification_to_user
             from app.models.gym import Gym
-            
+
             # Get gym owner
             gym_stmt = select(Gym).where(Gym.id == user.gym_id)
             gym = self.session.exec(gym_stmt).first()
-            
+
             if gym and gym.owner_id:
                 notification_title = "New Payment Received"
                 notification_message = f"{user.name} made a payment of ₹{payment_amount} for plan {plan.name}"
-                
+
                 notification_data = {
                     "type": "payment",
                     "payment_id": db_payment.id,
                     "gym_id": user.gym_id,
                     "screen": "/payments"
                 }
-                
+
                 # Send FCM notification
                 send_fcm_notification_to_user(
                     user_id=gym.owner_id,
@@ -188,7 +188,7 @@ class PaymentService:
         # Send FCM notification to member
         try:
             from app.utils.fcm_notification import send_fcm_notification_to_user
-            
+
             if payment_status_update.status == PaymentStatusType.APPROVE:
                 notification_title = "Payment Verified"
                 notification_message = f"Thank you! Your payment of ₹{payment.amount} has been verified successfully."
@@ -197,14 +197,14 @@ class PaymentService:
                 notification_title = "Payment Rejected"
                 notification_message = f"Your payment of ₹{payment.amount} has been rejected. Please contact the gym for more details."
                 notification_type = "payment_rejected"
-            
+
             notification_data = {
                 "type": notification_type,
                 "payment_id": payment.id,
                 "gym_id": payment.gym_id,
                 "screen": "/payments"
             }
-            
+
             # Send FCM notification
             send_fcm_notification_to_user(
                 user_id=payment.user_id,
@@ -231,7 +231,7 @@ class PaymentService:
         """
         Get payments for a gym with pagination and status filtering.
         Returns payment details with member's current plan information.
-        
+
         Args:
             gym_id: Gym ID
             filter_status: Filter by status - "all", "approved", "rejected", or "pending" (default)
@@ -239,7 +239,7 @@ class PaymentService:
             page_size: Items per page
         """
         from app.models.user import User
-        
+
         # Build status filter condition
         status_conditions = []
         if filter_status == "all":
@@ -263,34 +263,34 @@ class PaymentService:
                 Payment.gym_id == gym_id,
                 Payment.status == "pending"
             ]
-        
+
         # Base query: payments for the gym with status filter
         stmt = select(Payment).where(
             and_(*status_conditions)
         ).order_by(Payment.created_at.desc())
-        
+
         # Get total count
         count_stmt = select(func.count(Payment.id)).where(
             and_(*status_conditions)
         )
         total = self.session.exec(count_stmt).first() or 0
-        
+
         # Apply pagination
         offset = (page - 1) * page_size
         stmt = stmt.limit(page_size).offset(offset)
-        
+
         # Execute query
         payments = self.session.exec(stmt).all()
-        
+
         # Build response with current plan info for each member
         # Optimize: Get all unique user_ids first, then fetch users, memberships and plans in bulk
         user_ids = list(set([payment.user_id for payment in payments]))
-        
+
         # Fetch all users in one query
         users_stmt = select(User).where(User.id.in_(user_ids))
         all_users = self.session.exec(users_stmt).all()
         users_by_id = {user.id: user for user in all_users}
-        
+
         # Fetch all active memberships for these users in one query
         today = date.today()
         memberships_stmt = select(Membership).where(
@@ -302,13 +302,13 @@ class PaymentService:
             )
         ).order_by(Membership.user_id, Membership.end_date.desc())
         all_memberships = self.session.exec(memberships_stmt).all()
-        
+
         # Group memberships by user_id (get the most recent one per user)
         memberships_by_user = {}
         for membership in all_memberships:
             if membership.user_id not in memberships_by_user:
                 memberships_by_user[membership.user_id] = membership
-        
+
         # Get all plan_ids and fetch plans in one query
         plan_ids = list(set([m.plan_id for m in memberships_by_user.values() if m.plan_id]))
         plans_by_id = {}
@@ -316,11 +316,11 @@ class PaymentService:
             plans_stmt = select(Plan).where(Plan.id.in_(plan_ids))
             all_plans = self.session.exec(plans_stmt).all()
             plans_by_id = {plan.id: plan for plan in all_plans}
-        
+
         # Build response
         pending_payments = []
         ist = ZoneInfo("Asia/Kolkata")
-        
+
         for payment in payments:
             # Format payment_at in Indian format
             payment_at = payment.created_at
@@ -329,14 +329,14 @@ class PaymentService:
             else:
                 payment_at = payment_at.astimezone(ist)
             payment_at_str = payment_at.strftime("%d-%m-%Y %H:%M:%S")
-            
+
             # Get current plan for the member
             current_plan = None
             membership = memberships_by_user.get(payment.user_id)
-            
+
             if membership:
                 plan = plans_by_id.get(membership.plan_id)
-                
+
                 if plan:
                     # Use new_price if available, otherwise use plan.price
                     total_price = float(membership.new_price) if membership.new_price else float(plan.price)
@@ -345,7 +345,7 @@ class PaymentService:
                         status = "expiring_soon"
                     else:
                         status = "active"
-                    
+
                     current_plan = CurrentPlanResponse(
                         plan_id=plan.id,
                         plan_name=plan.name,
@@ -354,12 +354,12 @@ class PaymentService:
                         status=status,
                         days_left=days_left
                     )
-            
+
             # Get user_name and name
             user = users_by_id.get(payment.user_id)
             user_name = user.user_name if user else ""
             name = user.name if user else ""
-            
+
             # Map payment status to response status
             if payment.status == "verified":
                 payment_status = "approved"
@@ -367,7 +367,7 @@ class PaymentService:
                 payment_status = "rejected"
             else:
                 payment_status = "pending"
-            
+
             # Note: remarks is not stored in Payment model, so returning None
             pending_payments.append(PendingPaymentResponse(
                 payment_id=payment.id,
@@ -380,9 +380,9 @@ class PaymentService:
                 current_plan=current_plan,
                 status=payment_status
             ))
-        
+
         has_next = (page * page_size) < total
-        
+
         return PendingPaymentListResponse(
             payments=pending_payments,
             total=total,
@@ -450,3 +450,24 @@ class PaymentService:
             start_date=start_date.isoformat() if start_date else None,
             end_date=end_date.isoformat() if end_date else None,
         )
+
+
+    def get_expiring_memberships_for_reminders(
+        self,
+        days: list[int],
+    ) -> list[Membership]:
+        """
+        Internal use only.
+        Returns active memberships expiring in given days.
+        """
+        today = date.today()
+        target_dates = [today + timedelta(days=d) for d in days]
+
+        stmt = select(Membership).where(
+            and_(
+                Membership.status == "active",
+                Membership.end_date.in_(target_dates) # type: ignore
+            )
+        )
+
+        return self.session.exec(stmt).all() # type: ignore

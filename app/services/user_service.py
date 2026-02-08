@@ -9,10 +9,8 @@ from app.models.user import RoleEnum, User
 from app.models.role import Role
 from app.models.membership import Membership
 from app.models.plan import Plan
-from app.models.role import Role
-from app.models.membership import Membership
-from app.models.plan import Plan
 from app.models.payments import Payment
+from app.models.gym import Gym
 from app.schemas.user import (
     UserCreate, UserResponse, UserUpdate,
     MemberListResponse, MemberListItemResponse,
@@ -22,6 +20,12 @@ from app.schemas.user import (
 from app.core.security import create_reset_token, get_password_hash, verify_reset_token
 from app.utils.emails import send_reset_password_mail
 RESET_TOKEN_EXPIRE_MINUTES = 10
+
+
+def get_owner_gym(current_user: User, session: SessionDep):
+    """Helper function to get the gym owned by the current admin user"""
+    stmt = select(Gym).where(Gym.owner_id == current_user.id)
+    return session.exec(stmt).first()
 
 
 class UserService:
