@@ -13,16 +13,10 @@ from app.schemas.dashboard import DashboardKPIsResponse
 from app.schemas.response import APIResponse
 from app.utils.response import success_response, failure_response
 from app.services.announcement_service import AnnouncementService
-from app.services.user_service import UserService
+from app.services.user_service import UserService, get_owner_gym
 from app.services.dashboard_service import DashboardService
 
 router = APIRouter(prefix="/admin", tags=["owner"])
-
-
-def get_owner_gym(current_user: User, session: SessionDep):
-    """Helper function to get the gym owned by the current admin user"""
-    stmt = select(Gym).where(Gym.owner_id == current_user.id)
-    return session.exec(stmt).first()
 
 @router.get("/dashboard", response_model=APIResponse[DashboardKPIsResponse])
 def get_dashboard_kpis(
@@ -41,7 +35,7 @@ def get_dashboard_kpis(
     stmt = select(Role).where(Role.id == current_user.role_id)
     role = session.exec(stmt).first()
     role_name = role.name if role else "MEMBER"
-    
+
     kpis_data = dashboard_service.get_user_kpis(
         user_id=current_user.id,
         role=role_name,
@@ -64,19 +58,19 @@ def create_announcement(
             message="No gym found for this owner",
             status_code=status.HTTP_404_NOT_FOUND
         )
-    
+
     # Ensure the announcement is for the owner's gym and set user_id
     if announcement.gym_id != gym.id:
         return failure_response(
             message="You can only create announcements for your own gym",
             status_code=status.HTTP_403_FORBIDDEN
         )
-    
+
     # Set the user_id to current user (owner)
     announcement_dict = announcement.model_dump()
     announcement_dict["user_id"] = current_user.id
     announcement_create = AnnouncementCreate(**announcement_dict)
-    
+
     announcement_service = AnnouncementService(session=session)
     announcement_data = announcement_service.create_announcement(announcement_create)
     return success_response(data=announcement_data, message="Announcement created successfully")
@@ -115,7 +109,7 @@ def add_member(
             message="gym_id is required when creating a member",
             status_code=status.HTTP_400_BAD_REQUEST
         )
-    
+
     # Validate that the gym exists and belongs to this owner
     gym = get_owner_gym(current_user, session)
     if not gym:
@@ -123,18 +117,18 @@ def add_member(
             message="No gym found for this owner",
             status_code=status.HTTP_404_NOT_FOUND
         )
-    
+
     if user.gym_id != gym.id:
         return failure_response(
             message="You can only create members for your own gym",
             status_code=status.HTTP_403_FORBIDDEN
         )
-    
+
     # Override role to MEMBER
     user_dict = user.model_dump()
     user_dict["role"] = "MEMBER"  # Set role name to MEMBER
     # gym_id is already in user_dict from model_dump
-    
+
     user_service = UserService(session=session)
     member_data = user_service.create_user(UserCreate(**user_dict))
     return success_response(data=member_data, message="Member added successfully")

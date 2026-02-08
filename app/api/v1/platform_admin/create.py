@@ -15,11 +15,13 @@ from app.schemas.gym import GymCreate, GymResponse
 from app.schemas.og_plan import OGPlanCreate, OGPlanResponse
 from app.schemas.announcement import PlatformAnnouncementCreate, AnnouncementResponse
 from app.schemas.response import APIResponse
+from app.services.payment import PaymentService
 from app.utils.response import success_response, failure_response
 from app.services.user_service import UserService
 from app.services.gym_service import GymService
 from app.services.og_plan_service import OGPlanService
 from app.services.announcement_service import AnnouncementService
+from app.utils.sns import publish_reminder_event
 
 router = APIRouter(prefix="/create", tags=["platform-admin"])
 
@@ -170,3 +172,26 @@ def create_platform_announcement(
     )
     return success_response(data=announcement_data, message="Announcement sent successfully")
 
+# app/api/internal/reminders.py
+@router.post("/reminders/run")
+def run_payment_reminders(session: SessionDep = None):
+    today = date.today()
+    payment_service = PaymentService(session=session)
+
+    memberships = payment_service.get_expiring_memberships_for_reminders(
+        days=[0, 3]
+    )
+
+    for m in memberships:
+        publish_reminder_event({
+            "event_type": "PAYMENT_REMINDER",
+            "user_id": str(m.user_id),
+            "membership_id": str(m.id),
+            "expiry_date": m.end_date.isoformat(),
+            "days_left": (m.end_date - today).days
+        })
+
+    return {
+        "status": "ok",
+        "published": len(memberships)
+    }

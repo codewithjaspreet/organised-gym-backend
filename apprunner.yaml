@@ -48,3 +48,5 @@ run:
     CLOUDINARY_URL: "arn:aws:secretsmanager:ap-south-1:324512687832:secret:og-db-secrets-NIaDV3:CLOUDINARY_URL::"
 
     FIREBASE_BASE_64: "arn:aws:secretsmanager:ap-south-1:324512687832:secret:og-db-secrets-NIaDV3:FIREBASE_BASE_64::"
+
+    SNS_TOPIC_ARN: "arn:aws:secretsmanager:ap-south-1:324512687832:secret:og-db-secrets-NIaDV3:SNS_TOPIC_ARN::"

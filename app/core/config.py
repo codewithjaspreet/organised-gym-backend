@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     cloudinary_cloud_api_key: Optional[str] = None
     cloudinary_cloud_api_secret: Optional[str] = None
 
+    # SNS
+    SNS_PAYMENT_REMINDERS_TOPIC_ARN: Optional[str] = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore"
